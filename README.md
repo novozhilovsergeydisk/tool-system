@@ -42,6 +42,7 @@
    ```
 
 5. **Настройка базы данных:**
+   Если у вас есть существующая база данных (файл db.sqlite3), скопируйте её на сервер в корневую папку проекта (/var/www/tool-system/db.sqlite3). В противном случае выполните миграции для создания новой базы.
    ```
    python manage.py migrate
    python manage.py collectstatic --noinput
