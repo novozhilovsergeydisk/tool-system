@@ -1,0 +1,140 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+
+<h3 class="mt-2 mb-3">🕰️ История движений</h3>
+
+<div class="filter-box">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Инструмент</label>
+            <input type="text" name="search" class="form-control form-control-sm" value="{{ request.GET.search }}" placeholder="Название или Инв.№">
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Участник (Сотрудник)</label>
+            <select name="employee" class="form-select form-select-sm">
+                <option value="">- Все -</option>
+                {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>
+                        {{ emp.get_full_name|default:emp.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Дата от</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request.GET.date_from }}">
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Дата до</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request.GET.date_to }}">
+        </div>
+
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100">Показать</button>
+        </div>
+    </form>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0 align-middle" style="font-size: 0.9rem;">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Оформил</th>
+                    <th>Действие</th>
+                    <th style="min-width: 250px;">Инструмент / Расходник</th>
+                    <th>Откуда</th>
+                    <th></th>
+                    <th>Куда</th>
+                    <th>Комментарий</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="text-nowrap">{{ log.date|date:"d.m.Y H:i" }}</td>
+                    
+                    <td>
+                        <span class="text-muted small">
+                            {{ log.initiator.get_full_name|default:log.initiator.username }}
+                        </span>
+                    </td>
+                    
+                    <td>
+                        {% if log.action_type == 'RECEIPT' %}
+                            <span class="badge bg-success">Приход</span>
+                        {% elif log.action_type == 'ISSUE' or log.action_type == 'KIT_ISSUE' %}
+                            <span class="badge bg-warning text-dark">Выдача</span>
+                        {% elif log.action_type == 'RETURN' or log.action_type == 'KIT_RETURN' %}
+                            <span class="badge bg-primary">Возврат</span>
+                        {% elif log.action_type == 'WRITEOFF' %}
+                            <span class="badge bg-danger">Списание</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <div class="fw-bold">{{ log.nomenclature_name }}</div>
+                        
+                        {% if log.nomenclature_article %}
+                            <div class="small text-muted font-monospace">Арт: {{ log.nomenclature_article }}</div>
+                        {% endif %}
+
+                        <div class="mt-1">
+                            {% if 'KIT' in log.action_type or log.nomenclature_article == 'КОМПЛЕКТ' %}
+                                <span class="badge bg-warning text-dark">КОМПЛЕКТ</span>
+                            {% elif log.serial_number %}
+                                <span class="badge bg-secondary font-monospace">Инв.№: {{ log.serial_number }}</span>
+                            {% else %}
+                                <span class="badge bg-info text-dark">{{ log.quantity }} шт.</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <td>
+                        {% if log.source_warehouse %}
+                            <i class="fa-solid fa-warehouse text-muted"></i> {{ log.source_warehouse.name }}
+                        {% elif log.source_user %}
+                            <i class="fa-solid fa-user text-primary"></i> {{ log.source_user.get_full_name|default:log.source_user.username }}
+                        {% elif log.source_kit %}
+                            <i class="fa-solid fa-toolbox text-secondary"></i> Компл: {{ log.source_kit.name }}
+                        {% elif log.kit_name and 'KIT' not in log.action_type and log.action_type == 'RETURN' %}
+                            <i class="fa-solid fa-toolbox text-secondary"></i> Компл: {{ log.kit_name }}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center text-muted"><i class="fa-solid fa-arrow-right"></i></td>
+
+                    <td>
+                        {% if log.target_warehouse %}
+                            <i class="fa-solid fa-warehouse text-muted"></i> {{ log.target_warehouse.name }}
+                        {% elif log.target_user %}
+                            <i class="fa-solid fa-user text-primary"></i> {{ log.target_user.get_full_name|default:log.target_user.username }}
+                        {% elif log.target_kit %}
+                            <i class="fa-solid fa-toolbox text-secondary"></i> Компл: {{ log.target_kit.name }}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td class="text-muted small">
+                        {{ log.comment|default:"-" }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">Истории пока нет</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

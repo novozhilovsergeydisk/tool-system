@@ -1,0 +1,53 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+    <h3 class="mb-0">🏭 Склады</h3>
+    
+    {% if user.is_staff %}
+    <a href="{% url 'warehouse_add' %}" class="btn btn-success">
+        <i class="fa-solid fa-plus"></i> Добавить склад
+    </a>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Адрес</th>
+                    {% if user.is_staff %} <th>Действия</th> {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for wh in warehouses %}
+                <tr>
+                    <td><b>{{ wh.name }}</b></td>
+                    <td class="text-muted">{{ wh.address|default:"-" }}</td>
+                    
+                    {% if user.is_staff %}
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{% url 'warehouse_edit' wh.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+                            <form action="{% url 'warehouse_delete' wh.id %}" method="post" onsubmit="return confirm('Удалить склад {{ wh.name }}?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">Складов нет</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

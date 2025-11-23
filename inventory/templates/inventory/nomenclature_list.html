@@ -1,0 +1,104 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+    <h3>📋 Справочник Номенклатуры</h3>
+    
+    {% if user.is_staff %}
+    <div>
+        <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addModal">
+            <i class="fa-solid fa-folder-plus"></i> Добавить номенклатуру
+        </button>
+        <a href="{% url 'tool_add' %}" class="btn btn-success">
+            <i class="fa-solid fa-box-open"></i> Добавить позицию
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Артикул</th>
+                    <th>Тип</th>
+                    <th>Описание</th>
+                    {% if user.is_staff %}<th style="width: 120px; text-align: center;">Действия</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td><span class="text-muted">{{ item.article }}</span></td>
+                    <td>
+                        {% if item.item_type == 'TOOL' %}
+                            <span class="badge bg-secondary">Инструмент</span>
+                        {% else %}
+                            <span class="badge bg-info text-dark">Расходник</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ item.description|truncatechars:50 }}</td>
+                    
+                    {% if user.is_staff %}
+                    <td align="center">
+                        <div class="d-flex justify-content-center gap-1">
+                            <a href="{% url 'nomenclature_edit' item.pk %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                <i class="fa-solid fa-pencil"></i>
+                            </a>
+
+                            <form action="{% url 'nomenclature_delete' item.pk %}" method="post" onsubmit="return confirm('Удалить {{ item.name }}? Внимание: это может удалить и все связанные товары!');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Новая Номенклатура (Вид)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Артикул</label>
+                        {{ form.article }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип</label>
+                        {{ form.item_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        {{ form.description }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

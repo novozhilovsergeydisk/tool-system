@@ -1,0 +1,138 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<style>
+    /* СТИЛИ ДЛЯ ЭКРАНА */
+    .barcode-card {
+        width: 220px;
+        padding: 10px;
+        background: white; /* Белый фон для сканера */
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-align: center;
+        display: inline-block;
+        margin: 5px;
+        vertical-align: top;
+        position: relative;
+    }
+    .btn-del {
+        position: absolute; top: 2px; right: 2px; 
+        color: red; cursor: pointer; display: none; font-size: 12px;
+    }
+    .barcode-card:hover .btn-del { display: block; }
+
+    /* СТИЛИ ДЛЯ ПЕЧАТИ (Ctrl+P) */
+    @media print {
+        body * { visibility: hidden; }
+        .navbar, .filter-box, h3, .alert, h5 { display: none !important; }
+        
+        #printableArea, #printableArea * {
+            visibility: visible;
+        }
+        #printableArea {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: white !important;
+            border: none !important;
+        }
+        .barcode-card { 
+            border: 1px dashed #ccc; 
+            page-break-inside: avoid; 
+            margin: 10px; 
+            float: left; 
+        }
+        .btn-del { display: none !important; }
+    }
+</style>
+
+<h3 class="mt-2 mb-3">🖨️ Распечатка серийных номеров</h3>
+
+<div class="alert alert-info py-2" style="font-size: 0.9em;">
+    Раздел позволяет распечатывать штрихкоды SN. Вводите номера в поле (можно сканером), они будут добавляться в список.
+</div>
+
+<div class="filter-box">
+    <div class="row align-items-end">
+        <div class="col-md-6">
+            <label class="form-label fw-bold small">S/N (вводите каждый с новой строки или сканируйте):</label>
+            <textarea class="form-control" id="snInput" rows="3" placeholder="123456..."></textarea>
+        </div>
+        <div class="col-md-6">
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" onclick="addBarcodes()">Добавить значения</button>
+                <button class="btn btn-secondary" onclick="clearList()">Очистить</button>
+                <button class="btn btn-primary ms-auto" onclick="window.print()">🖨️ Печать (Ctrl+P)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h5 class="mt-4">Список для печати: <span id="count" class="badge bg-secondary">0</span></h5>
+
+<div id="printableArea" class="bg-body-tertiary p-3 border rounded" style="min-height: 200px;">
+    <div id="barcodeList"></div>
+</div>
+
+<script>
+    function addBarcodes() {
+        let input = document.getElementById('snInput');
+        let text = input.value.trim();
+        if (!text) return;
+
+        let lines = text.split(/\n/); // Разбиваем по строкам
+        
+        lines.forEach(sn => {
+            sn = sn.trim();
+            if (sn) createBarcode(sn);
+        });
+
+        input.value = ''; // Очищаем поле
+        updateCount();
+    }
+
+    function createBarcode(sn) {
+        let div = document.createElement('div');
+        div.className = 'barcode-card';
+        div.innerHTML = `
+            <div class="btn-del" onclick="this.parentElement.remove(); updateCount();">❌</div>
+            <svg class="barcode"
+                jsbarcode-format="CODE128"
+                jsbarcode-value="${sn}"
+                jsbarcode-textmargin="0"
+                jsbarcode-fontoptions="bold">
+            </svg>
+        `;
+        document.getElementById('barcodeList').appendChild(div);
+        try {
+            JsBarcode(div.querySelector('svg')).init();
+        } catch (e) {
+            div.innerHTML += '<div class="text-danger small">Ошибка кода</div>';
+        }
+    }
+
+    function clearList() {
+        if(confirm('Очистить весь список?')) {
+            document.getElementById('barcodeList').innerHTML = '';
+            updateCount();
+        }
+    }
+
+    function updateCount() {
+        document.getElementById('count').innerText = document.getElementById('barcodeList').children.length;
+    }
+    
+    // Добавление по Enter (удобно для сканера)
+    document.getElementById('snInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            addBarcodes();
+        }
+    });
+</script>
+
+{% endblock %}

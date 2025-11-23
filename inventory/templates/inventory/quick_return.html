@@ -1,0 +1,205 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card shadow-lg">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fa-solid fa-qrcode"></i> Быстрый возврат</h4>
+                <span class="badge bg-white text-success fs-6" id="counterBadge">0 шт.</span>
+            </div>
+            <div class="card-body">
+                
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-body-secondary">Сканируйте штрихкод (Инв. №):</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-body-tertiary"><i class="fa-solid fa-barcode"></i></span>
+                        <input type="text" id="scanInput" class="form-control" placeholder="Ожидание сканирования..." autofocus autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" onclick="processInput()">Добавить</button>
+                    </div>
+                    <div class="form-text" id="statusMsg">Наведите сканер или введите номер вручную и нажмите Enter.</div>
+                </div>
+
+                <div class="table-responsive border rounded mb-3 bg-body" style="max-height: 400px;">
+                    <table class="table table-striped table-hover table-custom mb-0 align-middle">
+                        <thead class="sticky-top">
+                            <tr>
+                                <th>Наименование</th>
+                                <th>Инв. №</th>
+                                <th>У кого сейчас</th>
+                                <th width="40"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanListBody">
+                            </tbody>
+                    </table>
+                </div>
+                
+                <div id="emptyListMsg" class="text-center text-body-secondary py-5">
+                    <i class="fa-solid fa-boxes-stacked fa-3x mb-3 text-secondary"></i>
+                    <p>Список пуст. Сканируйте инструменты для возврата.</p>
+                </div>
+
+                <div class="d-grid">
+                    <button id="btnFinish" class="btn btn-success btn-lg fw-bold" disabled data-bs-toggle="modal" data-bs-target="#confirmModal">
+                        ВЕРНУТЬ ВСЕ ТОВАРЫ
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Куда возвращаем?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Склад приема:</label>
+                    <select id="targetWarehouse" class="form-select form-select-lg">
+                        {% for wh in warehouses %}
+                            <option value="{{ wh.id }}">{{ wh.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Комментарий (необязательно):</label>
+                    <textarea id="returnComment" class="form-control" rows="2" placeholder="Например: Возврат с объекта"></textarea>
+                </div>
+                <div class="alert alert-info small">
+                    Будет возвращено товаров: <b id="confirmCount">0</b> шт.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success fw-bold" onclick="submitReturn()">ПОДТВЕРДИТЬ ВОЗВРАТ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- ДАННЫЕ ---
+    const issuedTools = {{ issued_tools_json|safe }}; 
+
+    let scanList = [];
+
+    const elInput = document.getElementById('scanInput');
+    const elList = document.getElementById('scanListBody');
+    const elEmpty = document.getElementById('emptyListMsg');
+    const elBadge = document.getElementById('counterBadge');
+    const elBtn = document.getElementById('btnFinish');
+    const elMsg = document.getElementById('statusMsg');
+
+    // 1. ОБРАБОТКА ВВОДА
+    elInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            processInput();
+        }
+    });
+
+    function processInput() {
+        const sn = elInput.value.trim();
+        if (!sn) return;
+
+        if (scanList.includes(sn)) {
+            showStatus(`⚠️ Товар ${sn} уже в списке!`, 'text-warning');
+            elInput.value = '';
+            return;
+        }
+
+        const tool = issuedTools.find(t => t.sn === sn);
+        
+        if (tool) {
+            addToList(tool);
+            showStatus(`✅ ${tool.name} добавлен!`, 'text-success');
+        } else {
+            showStatus(`❌ Товар ${sn} не найден среди выданных!`, 'text-danger');
+        }
+        
+        elInput.value = '';
+        elInput.focus();
+    }
+
+    function showStatus(text, colorClass) {
+        elMsg.innerText = text;
+        elMsg.className = 'form-text fw-bold ' + colorClass;
+    }
+
+    // 2. ДОБАВЛЕНИЕ В ТАБЛИЦУ
+    function addToList(tool) {
+        scanList.push(tool.sn);
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${tool.name}</strong></td>
+            <td class="font-monospace">${tool.sn}</td>
+            <td class="text-muted small">${tool.holder}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeItem(this, '${tool.sn}')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </td>
+        `;
+        elList.prepend(tr);
+        updateUI();
+    }
+
+    function removeItem(btn, sn) {
+        scanList = scanList.filter(s => s !== sn);
+        btn.closest('tr').remove();
+        updateUI();
+        elInput.focus();
+    }
+
+    function updateUI() {
+        const count = scanList.length;
+        elBadge.innerText = count + ' шт.';
+        document.getElementById('confirmCount').innerText = count;
+
+        if (count > 0) {
+            elEmpty.style.display = 'none';
+            elBtn.disabled = false;
+        } else {
+            elEmpty.style.display = 'block';
+            elBtn.disabled = true;
+        }
+    }
+
+    // 3. ОТПРАВКА НА СЕРВЕР
+    function submitReturn() {
+        const whId = document.getElementById('targetWarehouse').value;
+        const comment = document.getElementById('returnComment').value;
+
+        fetch("{% url 'quick_return' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                warehouse_id: whId,
+                sn_list: scanList,
+                comment: comment
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Товары успешно возвращены!');
+                location.reload();
+            } else {
+                alert('Ошибка при возврате.');
+            }
+        });
+    }
+
+    window.onload = function() {
+        elInput.focus();
+    };
+</script>
+{% endblock %}

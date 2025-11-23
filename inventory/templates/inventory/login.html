@@ -1,0 +1,45 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh; background-color: #f9f9f9;">
+    <div class="card shadow-lg border-0" style="width: 100%; max-width: 400px;">
+        <div class="card-header bg-dark text-white text-center py-3">
+            <h4 class="mb-0"><i class="fa-solid fa-warehouse"></i> Вход в систему</h4>
+        </div>
+        <div class="card-body p-4">
+            
+            <form method="post">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                    <div class="alert alert-danger text-center small p-2 mb-3">
+                        <i class="fa-solid fa-circle-exclamation"></i> Неверный логин или пароль
+                    </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label text-muted fw-bold small">Логин</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white text-muted"><i class="fa-solid fa-user"></i></span>
+                        <input type="text" name="username" class="form-control" placeholder="Введите логин" required autofocus>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-muted fw-bold small">Пароль</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white text-muted"><i class="fa-solid fa-lock"></i></span>
+                        <input type="password" name="password" class="form-control" placeholder="Введите пароль" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Войти</button>
+            </form>
+
+        </div>
+        <div class="card-footer text-center bg-white border-0 text-muted small pb-3">
+            Складская система v1.0
+        </div>
+    </div>
+</div>
+{% endblock %}

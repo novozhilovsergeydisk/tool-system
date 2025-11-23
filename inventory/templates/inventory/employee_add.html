@@ -1,0 +1,37 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fa-solid fa-user-plus"></i> Новый сотрудник</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="alert alert-light border small">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Если не ввести пароль, будет установлен стандартный: <b>123456</b>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'employee_list' %}" class="btn btn-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-success">Создать сотрудника</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

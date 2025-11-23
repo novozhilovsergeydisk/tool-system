@@ -1,0 +1,95 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fa-solid fa-box-open"></i> Приход товара</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.nomenclature.label }}</label>
+                        {{ form.nomenclature }}
+                    </div>
+
+                    <div class="mb-3" id="block-sn">
+                        <label class="form-label fw-bold">{{ form.inventory_id.label }}</label>
+                        {{ form.inventory_id }}
+                        <div class="form-text">Обязательно для инструментов</div>
+                    </div>
+
+                    <div class="mb-3" id="block-qty" style="display: none;">
+                        <label class="form-label fw-bold">{{ form.quantity.label }}</label>
+                        {{ form.quantity }}
+                        <div class="form-text">Укажите объем поступления</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.current_warehouse.label }}</label>
+                        {{ form.current_warehouse }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.purchase_date.label }}</label>
+                        {{ form.purchase_date }}
+                    </div>
+
+                    <div id="block-status">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">{{ form.status.label }}</label>
+                            {{ form.status }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">{{ form.condition.label }}</label>
+                            {{ form.condition }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'nomenclature_list' %}" class="btn btn-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-success">Принять на склад</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Получаем данные из Python (Словарь ID -> Тип)
+    const nomTypes = {{ nomenclature_types_json|safe }};
+    
+    const selectNom = document.getElementById('id_nomenclature');
+    const blockSn = document.getElementById('block-sn');
+    const blockQty = document.getElementById('block-qty');
+    const blockStatus = document.getElementById('block-status');
+
+    function toggleFields() {
+        const selectedId = selectNom.value;
+        const type = nomTypes[selectedId]; // Получаем тип (TOOL или CONSUMABLE)
+
+        if (type === 'CONSUMABLE') {
+            // Если Расходник:
+            blockSn.style.display = 'none';       // Скрываем S/N
+            blockStatus.style.display = 'none';   // Скрываем Статус/Состояние
+            blockQty.style.display = 'block';     // Показываем Количество
+            document.getElementById('id_inventory_id').value = ''; // Очищаем S/N
+        } else {
+            // Если Инструмент (или ничего не выбрано):
+            blockSn.style.display = 'block';
+            blockStatus.style.display = 'block';
+            blockQty.style.display = 'none';
+        }
+    }
+
+    // Слушаем изменения
+    selectNom.addEventListener('change', toggleFields);
+    
+    // Запускаем один раз при загрузке (если форма вернулась с ошибкой)
+    toggleFields();
+</script>
+{% endblock %}

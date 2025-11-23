@@ -1,0 +1,5 @@
+tool_system.zip
+.env
+__pycache__/
+*.pyc
+db.sqlite3

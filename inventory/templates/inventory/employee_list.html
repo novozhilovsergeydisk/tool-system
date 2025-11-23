@@ -1,0 +1,74 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+    <h3 class="mb-0">👥 Сотрудники</h3>
+    
+    {% if user.is_staff %}
+    <a href="{% url 'employee_add' %}" class="btn btn-success">
+        <i class="fa-solid fa-user-plus"></i> Добавить сотрудника
+    </a>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Логин</th>
+                    <th>Имя Фамилия</th>
+                    <th>Email</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr class="{% if not emp.is_active %}opacity-50{% endif %}">
+                    <td>
+                        {% if not emp.is_active %}
+                            <s class="text-danger">{{ emp.username }}</s>
+                        {% else %}
+                            <b>{{ emp.username }}</b>
+                        {% endif %}
+                    </td>
+                    <td>{{ emp.first_name }} {{ emp.last_name }}</td>
+                    <td>{{ emp.email }}</td>
+                    <td>
+                        {% if emp.is_active %}
+                            <span class="badge bg-success">Активен</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Заблокирован</span>
+                        {% endif %}
+                        {% if emp.is_staff %}
+                            <span class="badge bg-danger">Админ</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{% url 'employee_edit' emp.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+                            
+                            {% if emp.id != user.id %}
+                                <form action="{% url 'employee_delete' emp.id %}" method="post" onsubmit="return confirm('Удалить сотрудника {{ emp.username }}? Это действие необратимо!');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-3 text-muted">Нет сотрудников</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

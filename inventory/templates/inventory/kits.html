@@ -1,0 +1,215 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="row h-100">
+    <div class="col-md-4 border-end bg-body p-3" style="min-height: 85vh;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">📂 Комплекты</h5>
+            {% if user.is_staff %}
+            <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#createKitModal">
+                <i class="fa-solid fa-plus"></i> Создать
+            </button>
+            {% endif %}
+        </div>
+        
+        <div class="list-group">
+            {% for kit in kits %}
+            <a href="?kit_id={{ kit.id }}" class="list-group-item list-group-item-action {% if selected_kit and selected_kit.id == kit.id %}active{% endif %}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">{{ kit.name }}</h6>
+                    <small>
+                        {% if kit.status == 'IN_STOCK' %}
+                            <span class="badge bg-success">На складе</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">Выдан</span>
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-body-secondary">{{ kit.description|truncatechars:20 }}</small>
+                    {% if kit.warehouse %}
+                        <small class="text-body-secondary"><i class="fa-solid fa-warehouse"></i> {{ kit.warehouse.name }}</small>
+                    {% endif %}
+                </div>
+                {% if kit.current_holder %}
+                <div class="mt-1 small text-warning">
+                    <i class="fa-solid fa-user"></i> {{ kit.current_holder.get_full_name|default:kit.current_holder.username }}
+                </div>
+                {% endif %}
+            </a>
+            {% empty %}
+            <div class="text-center text-body-secondary py-4">Нет комплектов</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-8 p-4 bg-body-tertiary">
+        {% if selected_kit %}
+            <div class="card shadow-sm">
+                <div class="card-header bg-body d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        {{ selected_kit.name }}
+                        {% if user.is_staff %}
+                            <button class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="modal" data-bs-target="#editKitModal" title="Редактировать комплект и склад">
+                                <i class="fa-solid fa-pencil"></i>
+                            </button>
+                        {% endif %}
+                    </h4>
+                    
+                    <div class="d-flex gap-2">
+                        {% if selected_kit.status == 'IN_STOCK' %}
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#issueKitModal">
+                                {% if user.is_staff %}<i class="fa-solid fa-hand-holding"></i> Выдать сотруднику{% else %}<i class="fa-solid fa-hand-point-up"></i> Взять себе{% endif %}
+                            </button>
+                        {% elif selected_kit.status == 'ISSUED' %}
+                             {% if user.is_staff or selected_kit.current_holder == user %}
+                                 <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#returnKitModal">
+                                    <i class="fa-solid fa-share"></i> Вернуть на склад
+                                 </button>
+                             {% else %}
+                                 <button class="btn btn-secondary" disabled><i class="fa-solid fa-lock"></i> Взят: {{ selected_kit.current_holder.username }}</button>
+                             {% endif %}
+                        {% endif %}
+
+                        {% if user.is_staff %}
+                        <form action="{% url 'kit_delete' selected_kit.id %}" method="post" class="d-inline ms-2" onsubmit="return confirm('Удалить комплект?');">
+                            {% csrf_token %}
+                            <button class="btn btn-outline-danger btn-sm" title="Удалить"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Описание:</strong> <span class="text-body-secondary">{{ selected_kit.description|default:"-" }}</span>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <strong>Склад приписки:</strong> 
+                            {% if selected_kit.warehouse %}
+                                <span class="badge bg-secondary">{{ selected_kit.warehouse.name }}</span>
+                            {% else %}
+                                <span class="text-danger">Не указан (нельзя добавить товары)</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <h6 class="mt-4 border-bottom pb-2">Инструменты:</h6>
+                    <table class="table table-sm table-hover align-middle">
+                        <thead><tr><th>Наименование</th><th>Артикул</th><th>S/N</th><th></th></tr></thead>
+                        <tbody>
+                            {% for tool in selected_kit.tools.all %}
+                            <tr>
+                                <td>{{ tool.nomenclature.name }}</td>
+                                <td class="text-body-secondary font-monospace small">{{ tool.nomenclature.article }}</td>
+                                <td><span class="badge bg-secondary font-monospace">{{ tool.inventory_id }}</span></td>
+                                <td class="text-end">
+                                    {% if selected_kit.status == 'IN_STOCK' %}
+                                    <button class="btn btn-link text-danger small text-decoration-none p-0" data-bs-toggle="modal" data-bs-target="#removeToolModal" onclick="setRemoveToolModal('{{ selected_kit.id }}', '{{ tool.id }}', '{{ tool.nomenclature.name }}')"><i class="fa-solid fa-minus"></i> Убрать</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-body-secondary text-center small">Нет инструментов</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <h6 class="mt-4 border-bottom pb-2">Расходники:</h6>
+                    <table class="table table-sm table-hover align-middle">
+                        <thead><tr><th>Наименование</th><th>Артикул</th><th>Кол-во</th><th></th></tr></thead>
+                        <tbody>
+                            {% for cons in selected_kit.consumables.all %}
+                            <tr>
+                                <td>{{ cons.nomenclature.name }}</td>
+                                <td class="text-body-secondary font-monospace small">{{ cons.nomenclature.article }}</td>
+                                <td><span class="badge bg-info text-dark">{{ cons.quantity }} шт.</span></td>
+                                <td class="text-end">
+                                    {% if selected_kit.status == 'IN_STOCK' %}
+                                    <button class="btn btn-link text-danger small text-decoration-none p-0" data-bs-toggle="modal" data-bs-target="#removeConsModal" onclick="setRemoveConsModal('{{ selected_kit.id }}', '{{ cons.id }}', '{{ cons.nomenclature.name }}', {{ cons.quantity }})"><i class="fa-solid fa-minus"></i> Убрать</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-body-secondary text-center small">Нет расходников</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    {% if selected_kit.status == 'IN_STOCK' and selected_kit.warehouse %}
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="p-3 bg-body border rounded h-100">
+                                <label class="small fw-bold mb-2"><i class="fa-solid fa-hammer"></i> Добавить инструмент:</label>
+                                <form action="{% url 'kit_add_tool' selected_kit.id %}" method="post" class="d-flex gap-1">
+                                    {% csrf_token %}
+                                    <select name="tool_id" class="form-select form-select-sm" required>
+                                        <option value="" selected disabled>Выберите...</option>
+                                        {% for t in available_tools %}
+                                            <option value="{{ t.id }}">
+                                                {{ t.nomenclature.name }} {{ t.nomenclature.article }} №{{ t.inventory_id }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-sm btn-primary"><i class="fa-solid fa-plus"></i></button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="p-3 bg-body border rounded h-100">
+                                <label class="small fw-bold mb-2"><i class="fa-solid fa-box"></i> Добавить расходник:</label>
+                                <form action="{% url 'kit_add_consumable' selected_kit.id %}" method="post" class="d-flex gap-1">
+                                    {% csrf_token %}
+                                    <select name="balance_id" class="form-select form-select-sm" required>
+                                        <option value="" selected disabled>Выберите...</option>
+                                        {% for c in available_consumables %}
+                                            <option value="{{ c.id }}">
+                                                {{ c.nomenclature.name }} {{ c.nomenclature.article }} [{{ c.quantity }} шт]
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="number" name="quantity" class="form-control form-control-sm" placeholder="Кол-во" style="width: 70px;" min="1" required>
+                                    <button class="btn btn-sm btn-primary"><i class="fa-solid fa-plus"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center text-body-secondary mt-5"><i class="fa-solid fa-toolbox fa-3x mb-3"></i><h4>Выберите комплект</h4></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if user.is_staff %}
+<div class="modal fade" id="createKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_create' %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Новый комплект</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Название</label>{{ form.name }}</div><div class="mb-3"><label class="fw-bold">Склад приписки</label>{{ form.warehouse }}</div><div class="mb-3"><label class="fw-bold">Описание</label>{{ form.description }}</div></div><div class="modal-footer"><button class="btn btn-success">Создать</button></div></form></div></div></div>
+{% if selected_kit %}
+<div class="modal fade" id="editKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_edit' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Редактирование</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Название</label>{{ edit_form.name }}</div><div class="mb-3"><label class="fw-bold">Склад приписки</label>{{ edit_form.warehouse }}</div><div class="mb-3"><label class="fw-bold">Описание</label>{{ edit_form.description }}</div></div><div class="modal-footer"><button class="btn btn-primary">Сохранить</button></div></form></div></div></div>
+{% endif %}
+{% endif %}
+
+{% if selected_kit %}
+<div class="modal fade" id="removeToolModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeToolForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать инструмент</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeToolName"></strong></p><p class="small">Вернется на склад: <b>{{ selected_kit.warehouse.name }}</b></p><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2" placeholder="Например: Замена"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
+<div class="modal fade" id="removeConsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeConsForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать расходник</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeConsName"></strong></p><p class="small">В комплекте: <span id="removeConsMax"></span> шт.</p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="removeConsQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
+<div class="modal fade" id="issueKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_issue' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Выдача комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <b>{{ selected_kit.name }}</b></p>{% if user.is_staff %}<div class="mb-3"><label>Кому:</label><select name="employee_id" class="form-select">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div>{% else %}<input type="hidden" name="employee_id" value="{{ user.id }}"><div class="alert alert-light border"><i class="fa-solid fa-user-check"></i> Получатель: <b>{{ user.get_full_name|default:user.username }}</b></div>{% endif %}<div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary">Подтвердить</button></div></form></div></div></div>
+<div class="modal fade" id="returnKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_return' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возвращаем: <b>{{ selected_kit.name }}</b></p><p>Склад: <b>{{ selected_kit.warehouse.name|default:"Не указан" }}</b></p><div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
+
+<script>
+    function setRemoveToolModal(kitId, toolId, name) {
+        document.getElementById('removeToolName').innerText = name;
+        document.getElementById('removeToolForm').action = "/kits/" + kitId + "/remove_tool/" + toolId + "/";
+    }
+    function setRemoveConsModal(kitId, balId, name, maxQty) {
+        document.getElementById('removeConsName').innerText = name;
+        document.getElementById('removeConsMax').innerText = maxQty;
+        var i = document.getElementById('removeConsQty'); i.max = maxQty; i.value = 1;
+        document.getElementById('removeConsForm').action = "/kits/" + kitId + "/remove_consumable/" + balId + "/";
+    }
+</script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+    <h3 style="margin:0;">📦 Товары на складе и у сотрудников</h3>
+</div>
+
+<div class="filter-box">
+    <span class="filter-title">Фильтры</span>
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small text-muted mb-1">Поиск</label>
+            <input type="text" name="search" class="form-control form-control-sm" value="{{ request.GET.search }}" placeholder="Например: Дрель">
+        </div>
+        
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Склад</label>
+            <select name="warehouse" id="filterWarehouse" class="form-select form-select-sm">
+                <option value="">- Все склады -</option>
+                {% for wh in warehouses %}
+                    <option value="{{ wh.id }}" {% if request.GET.warehouse == wh.id|stringformat:"s" %}selected{% endif %}>🏠 {{ wh.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Сотрудник</label>
+            <select name="employee" id="filterEmployee" class="form-select form-select-sm">
+                <option value="">- Все сотрудники -</option>
+                {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>👤 {{ emp.get_full_name|default:emp.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Найти</button>
+            <a href="{% url 'index' %}" class="btn btn-secondary btn-sm">X</a>
+        </div>
+    </form>
+</div>
+
+<h5 class="mt-4 mb-2 text-secondary"><i class="fa-solid fa-hammer"></i> Инструменты</h5>
+<div class="card shadow-sm mb-5">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover table-custom mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th>Наименование</th>
+                    <th>Артикул</th>
+                    <th>Инв. №</th>
+                    <th>Локация</th>
+                    <th>Состояние</th>
+                    <th>Статус</th>
+                    {% if user.is_staff %} <th style="width: 160px; text-align: center;">Действия</th> {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for tool in tools %}
+                <tr>
+                    <td>{{ tool.id }}</td>
+                    <td><strong>{{ tool.nomenclature.name }}</strong></td>
+                    <td class="text-muted font-monospace small">{{ tool.nomenclature.article }}</td>
+                    <td><span class="badge bg-secondary font-monospace fs-6">{{ tool.inventory_id }}</span></td>
+                    <td>
+                        {% if tool.current_holder %} <span class="text-primary"><i class="fa-solid fa-user"></i> {{ tool.current_holder.get_full_name|default:tool.current_holder.username }}</span>
+                        {% elif tool.current_warehouse %} <span class="text-secondary"><i class="fa-solid fa-warehouse"></i> {{ tool.current_warehouse.name }}</span>
+                        {% else %} <span class="text-danger">?</span> {% endif %}
+                    </td>
+                    <td>
+                        {% if tool.condition == 'NEW' %}<span class="badge rounded-pill text-bg-info text-white">Новое</span>
+                        {% elif tool.condition == 'USED' %}<span class="badge rounded-pill bg-light text-dark border">Б/У</span>
+                        {% elif tool.condition == 'BROKEN' %}<span class="badge rounded-pill bg-danger">Сломано</span>
+                        {% else %}{{ tool.get_condition_display }}{% endif %}
+                    </td>
+                    <td>
+                        {% if tool.status == 'IN_STOCK' %}<span class="badge bg-success">На складе</span>
+                        {% elif tool.status == 'ISSUED' %}<span class="badge bg-warning text-dark">Выдано</span>
+                        {% elif tool.status == 'BROKEN' %}<span class="badge bg-danger">В ремонте</span>
+                        {% else %}<span class="badge bg-secondary">{{ tool.get_status_display }}</span>{% endif %}
+                    </td>
+                    {% if user.is_staff %}
+                    <td align="center">
+                        <div class="d-flex justify-content-center gap-1">
+                            {% if tool.status == 'IN_STOCK' %}
+                                <button class="btn btn-sm btn-warning text-dark" 
+                                        title="Выдать сотруднику"
+                                        data-bs-toggle="modal" data-bs-target="#issueModal"
+                                        onclick="setIssueModal('{{ tool.id }}', '{{ tool.nomenclature.name }}')">
+                                    <i class="fa-solid fa-hand-holding"></i>
+                                </button>
+                            {% elif tool.status == 'ISSUED' %}
+                                <button class="btn btn-sm btn-success" 
+                                        title="Вернуть на склад"
+                                        data-bs-toggle="modal" data-bs-target="#returnModal"
+                                        onclick="setReturnModal('{{ tool.id }}', '{{ tool.nomenclature.name }}')">
+                                    <i class="fa-solid fa-share"></i>
+                                </button>
+                            {% endif %}
+                            
+                            <a href="{% url 'tool_edit' tool.id %}" class="btn btn-outline-secondary btn-sm" title="Редактировать">
+                                <i class="fa-solid fa-pencil"></i>
+                            </a>
+                            
+                            <button class="btn btn-sm btn-danger"
+                                    title="Списать (Удалить)"
+                                    data-bs-toggle="modal" data-bs-target="#toolWriteoffModal"
+                                    onclick="setToolWriteoffModal('{{ tool.id }}', '{{ tool.nomenclature.name }}', '{{ tool.inventory_id }}')">
+                                <i class="fa-solid fa-fire"></i>
+                            </button>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center py-3 text-muted">Нет инструментов</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h5 class="mt-4 mb-2 text-secondary"><i class="fa-solid fa-boxes-stacked"></i> Расходные материалы</h5>
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover table-custom mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Наименование</th>
+                    <th>Артикул</th>
+                    <th>Количество</th>
+                    <th>Локация</th>
+                    {% if user.is_staff %} <th style="width: 160px; text-align: center;">Действия</th> {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in consumables %}
+                <tr>
+                    <td><strong>{{ item.nomenclature.name }}</strong></td>
+                    <td class="text-muted font-monospace small">{{ item.nomenclature.article }}</td>
+                    <td><span class="badge bg-primary fs-6">{{ item.quantity }}</span></td>
+                    <td>
+                        {% if item.holder %}
+                            <span class="text-primary"><i class="fa-solid fa-user"></i> {{ item.holder.get_full_name|default:item.holder.username }}</span>
+                        {% elif item.warehouse %}
+                            <span class="text-secondary"><i class="fa-solid fa-warehouse"></i> {{ item.warehouse.name }}</span>
+                        {% endif %}
+                    </td>
+                    
+                    {% if user.is_staff %}
+                    <td align="center">
+                        <div class="d-flex justify-content-center gap-1">
+                            {% if item.warehouse and item.quantity > 0 %}
+                                <button class="btn btn-sm btn-warning text-dark" 
+                                        title="Выдать сотруднику"
+                                        data-bs-toggle="modal" data-bs-target="#consumableIssueModal"
+                                        onclick="setConsumableIssueModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})">
+                                    <i class="fa-solid fa-hand-holding"></i>
+                                </button>
+                            {% endif %}
+
+                            {% if item.holder and item.quantity > 0 %}
+                                <button class="btn btn-sm btn-success" 
+                                        title="Вернуть на склад"
+                                        data-bs-toggle="modal" data-bs-target="#consumableReturnModal"
+                                        onclick="setConsumableReturnModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})">
+                                    <i class="fa-solid fa-share"></i>
+                                </button>
+                            {% endif %}
+
+                            <button class="btn btn-sm btn-danger"
+                                    title="Списать (потрачено)"
+                                    data-bs-toggle="modal" data-bs-target="#consumableWriteoffModal"
+                                    onclick="setConsumableWriteoffModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})">
+                                <i class="fa-solid fa-fire"></i>
+                            </button>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-3 text-muted">Нет расходников</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if user.is_staff %}
+<div class="modal fade" id="issueModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="issueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <strong id="issueToolName"></strong></p><label>Сотрудник:</label><select name="employee_id" class="form-select" required><option value="" disabled selected>Выберите...</option>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-primary">Выдать</button></div></form></div></div></div>
+<div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="returnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат на склад</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возврат: <strong id="returnToolName"></strong></p><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
+<div class="modal fade" id="toolWriteoffModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="toolWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-warning small"><i class="fa-solid fa-triangle-exclamation"></i> Инструмент будет удален из списка активных товаров!</div><p>Списать: <strong id="toolWriteName"></strong></p><p>Инв. №: <span id="toolWriteInv" class="font-monospace"></span></p><div class="mb-3"><label>Причина списания:</label><textarea name="reason" class="form-control" rows="3" placeholder="Например: Утерян, Сломан без возможности ремонта" required></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Подтвердить списание</button></div></form></div></div></div>
+
+<div class="modal fade" id="consumableIssueModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="consumableIssueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="consumableName"></strong></p><p class="text-muted small">Доступно: <span id="consumableMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="consumableQty" class="form-control" min="1" required></div><div class="mb-3"><label>Сотрудник:</label><select name="employee_id" class="form-select" required><option value="" disabled selected>Выберите...</option>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-primary">Выдать</button></div></form></div></div></div>
+<div class="modal fade" id="consumableReturnModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="consumableReturnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="conRetName"></strong></p><p class="text-muted small">На руках: <span id="conRetMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conRetQty" class="form-control" min="1" required></div><div class="mb-3"><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
+<div class="modal fade" id="consumableWriteoffModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="consumableWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Списать: <strong id="conWriteName"></strong></p><p class="text-muted small">Доступно: <span id="conWriteMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conWriteQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><input type="text" name="reason" class="form-control" placeholder="Сломано / Израсходовано" required></div></div><div class="modal-footer"><button class="btn btn-danger">Списать</button></div></form></div></div></div>
+
+<script>
+    // --- ЛОГИКА МОДАЛЬНЫХ ОКОН ---
+    function setIssueModal(id, name) {
+        document.getElementById('issueToolName').innerText = name;
+        document.getElementById('issueForm').action = "/tool/" + id + "/issue/";
+    }
+    function setReturnModal(id, name) {
+        document.getElementById('returnToolName').innerText = name;
+        document.getElementById('returnForm').action = "/tool/" + id + "/return/";
+    }
+    function setToolWriteoffModal(id, name, inv) {
+        document.getElementById('toolWriteName').innerText = name;
+        document.getElementById('toolWriteInv').innerText = inv;
+        document.getElementById('toolWriteoffForm').action = "/tool/" + id + "/writeoff/";
+    }
+    
+    function setConsumableIssueModal(id, name, maxQty) {
+        document.getElementById('consumableName').innerText = name;
+        document.getElementById('consumableMax').innerText = maxQty;
+        var i = document.getElementById('consumableQty'); i.max = maxQty; i.value = 1;
+        document.getElementById('consumableIssueForm').action = "/consumable/" + id + "/issue/";
+    }
+    function setConsumableReturnModal(id, name, maxQty) {
+        document.getElementById('conRetName').innerText = name;
+        document.getElementById('conRetMax').innerText = maxQty;
+        var i = document.getElementById('conRetQty'); i.max = maxQty; i.value = 1;
+        document.getElementById('consumableReturnForm').action = "/consumable/" + id + "/return/";
+    }
+    function setConsumableWriteoffModal(id, name, maxQty) {
+        document.getElementById('conWriteName').innerText = name;
+        document.getElementById('conWriteMax').innerText = maxQty;
+        var i = document.getElementById('conWriteQty'); i.max = maxQty; i.value = 1;
+        document.getElementById('consumableWriteoffForm').action = "/consumable/" + id + "/writeoff/";
+    }
+
+    // --- ЛОГИКА ВЗАИМНОГО ИСКЛЮЧЕНИЯ ФИЛЬТРОВ ---
+    const filterWh = document.getElementById('filterWarehouse');
+    const filterEmp = document.getElementById('filterEmployee');
+
+    filterWh.addEventListener('change', function() {
+        if (this.value) filterEmp.value = ""; // Если выбрали склад, сбрасываем сотрудника
+    });
+
+    filterEmp.addEventListener('change', function() {
+        if (this.value) filterWh.value = ""; // Если выбрали сотрудника, сбрасываем склад
+    });
+
+    // --- TOOLTIPS ---
+    document.addEventListener("DOMContentLoaded", function(){
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endif %}
+
+{% endblock %}
