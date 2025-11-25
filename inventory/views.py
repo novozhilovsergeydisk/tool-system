@@ -7,32 +7,105 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from datetime import date, timedelta
-from .models import Nomenclature, ToolInstance, Warehouse, MovementLog, ConsumableBalance, ToolKit, Car
-from .forms import NomenclatureForm, EmployeeForm, ToolInstanceForm, ToolKitForm, WarehouseForm, CarForm
+from django.contrib import messages
+from .models import Nomenclature, ToolInstance, Warehouse, MovementLog, ConsumableBalance, ToolKit, Car, News
+from .forms import NomenclatureForm, EmployeeForm, ToolInstanceForm, ToolKitForm, WarehouseForm, CarForm, NewsForm
 
-# --- 1. ГЛАВНАЯ ---
+# --- 1. ДАШБОРД И СПИСОК ТОВАРОВ ---
 @login_required
 def index(request):
+    """Главная страница: Дашборд"""
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    # Статистика
+    ops_today = MovementLog.objects.filter(date__date=today).count()
+    ops_yesterday = MovementLog.objects.filter(date__date=yesterday).count()
+    rec_today = MovementLog.objects.filter(date__date=today, action_type='RECEIPT').exclude(serial_number='').count()
+    rec_yesterday = MovementLog.objects.filter(date__date=yesterday, action_type='RECEIPT').exclude(serial_number='').count()
+    users_today = User.objects.filter(actions__date__date=today).distinct()
+    users_yesterday = User.objects.filter(actions__date__date=yesterday).distinct()
+
+    wh_count = ToolInstance.objects.filter(current_warehouse__isnull=False).values('current_warehouse').distinct().count()
+    emp_count = ToolInstance.objects.filter(current_holder__isnull=False).values('current_holder').distinct().count()
+    kit_count = ToolKit.objects.filter(status='ISSUED').count()
+    car_count = Car.objects.filter(status='ON_ROUTE').count()
+    
+    # НОВОСТИ (последние 5)
+    latest_news = News.objects.all().order_by('-date')[:5]
+
+    context = {
+        'ops_today': ops_today, 'ops_yesterday': ops_yesterday,
+        'rec_today': rec_today, 'rec_yesterday': rec_yesterday,
+        'users_today': users_today, 'users_yesterday': users_yesterday,
+        'wh_count': wh_count, 'emp_count': emp_count,
+        'kit_count': kit_count, 'car_count': car_count,
+        'latest_news': latest_news, # Передаем новости
+        'news_form': NewsForm() # Форма для создания
+    }
+    return render(request, 'inventory/index.html', context)
+
+@staff_member_required
+def news_add(request):
+    if request.method == 'POST':
+        form = NewsForm(request.POST)
+        if form.is_valid():
+            news = form.save(commit=False)
+            news.author = request.user
+            news.save()
+    return redirect('index')
+
+@staff_member_required
+def news_delete(request, pk):
+    news = get_object_or_404(News, pk=pk)
+    if request.method == 'POST':
+        news.delete()
+    return redirect('index')
+
+# --- 2. СПИСОК ТОВАРОВ (С ПАГИНАЦИЕЙ) ---
+@login_required
+def tool_list(request):
+    """Таблица всех инструментов и расходников"""
+    # 1. Базовые запросы
     tools = ToolInstance.objects.filter(kit__isnull=True, car__isnull=True).order_by('id')
     consumables = ConsumableBalance.objects.all().order_by('nomenclature__name')
+    
     employees = User.objects.filter(is_active=True).order_by('username')
     warehouses = Warehouse.objects.all().order_by('name')
-    
+
+    # 2. Фильтрация
     search = request.GET.get('search', '')
-    wh_filter = request.GET.get('warehouse', '')
-    emp_filter = request.GET.get('employee', '')
+    wh_id = request.GET.get('warehouse', '')
+    emp_id = request.GET.get('employee', '')
 
     if search:
-        tools = tools.filter(Q(nomenclature__name__icontains=search)|Q(inventory_id__icontains=search))
+        tools = tools.filter(Q(nomenclature__name__icontains=search) | Q(inventory_id__icontains=search))
         consumables = consumables.filter(nomenclature__name__icontains=search)
-    if wh_filter:
-        tools = tools.filter(current_warehouse_id=wh_filter)
-        consumables = consumables.filter(warehouse_id=wh_filter)
-    if emp_filter:
-        tools = tools.filter(current_holder_id=emp_filter)
-        consumables = consumables.filter(holder_id=emp_filter)
+    if wh_id:
+        tools = tools.filter(current_warehouse_id=wh_id)
+        consumables = consumables.filter(warehouse_id=wh_id)
+    if emp_id:
+        tools = tools.filter(current_holder_id=emp_id)
+        consumables = consumables.filter(holder_id=emp_id)
 
-    return render(request, 'inventory/index.html', {'tools': tools, 'consumables': consumables, 'employees': employees, 'warehouses': warehouses})
+    # 3. Пагинация ИНСТРУМЕНТОВ (20 на страницу)
+    paginator_tools = Paginator(tools, 10)
+    page_tools_num = request.GET.get('page_tools')
+    tools_page = paginator_tools.get_page(page_tools_num)
+
+    # 4. Пагинация РАСХОДНИКОВ (20 на страницу)
+    paginator_cons = Paginator(consumables, 10)
+    page_cons_num = request.GET.get('page_cons')
+    consumables_page = paginator_cons.get_page(page_cons_num)
+
+    context = {
+        'tools': tools_page, 
+        'consumables': consumables_page, 
+        'employees': employees, 
+        'warehouses': warehouses
+    }
+    return render(request, 'inventory/tool_list.html', context)
+
 
 # --- 2. АВТОМОБИЛИ ---
 @login_required
@@ -201,11 +274,11 @@ def car_mark_fixed(request, car_id):
         )
     return redirect(f'/cars/?car_id={car.id}')
 
-# --- 3. ИСТОРИЯ (ФИЛЬТРУЕМ ЛИШНЕЕ) ---
+# --- 3. ИСТОРИЯ (С ПАГИНАЦИЕЙ) ---
 @login_required
 def history_list(request):
     # Исключаем действия с автомобилями из общей истории
-    logs = MovementLog.objects.exclude(
+    logs_qs = MovementLog.objects.exclude(
         action_type__in=[
             'CAR_ISSUE', 'CAR_RETURN', 
             'CAR_TO_MAINT', 'CAR_FROM_MAINT',
@@ -214,16 +287,24 @@ def history_list(request):
     ).order_by('-date')
     
     employees = User.objects.all().order_by('username')
+    
+    # Фильтры
     search = request.GET.get('search', '')
     emp_id = request.GET.get('employee', '')
     d_from = request.GET.get('date_from', '')
     d_to = request.GET.get('date_to', '')
 
-    if search: logs = logs.filter(Q(nomenclature_name__icontains=search)|Q(serial_number__icontains=search))
-    if emp_id: logs = logs.filter(Q(source_user_id=emp_id)|Q(target_user_id=emp_id)|Q(initiator_id=emp_id))
-    if d_from: logs = logs.filter(date__gte=d_from)
-    if d_to: logs = logs.filter(date__lte=d_to)
-    return render(request, 'inventory/history.html', {'logs': logs, 'employees': employees})
+    if search: logs_qs = logs_qs.filter(Q(nomenclature_name__icontains=search)|Q(serial_number__icontains=search))
+    if emp_id: logs_qs = logs_qs.filter(Q(source_user_id=emp_id)|Q(target_user_id=emp_id)|Q(initiator_id=emp_id))
+    if d_from: logs_qs = logs_qs.filter(date__gte=d_from)
+    if d_to: logs_qs = logs_qs.filter(date__lte=d_to)
+
+    # ПАГИНАЦИЯ (10 записей на страницу)
+    paginator = Paginator(logs_qs, 10) 
+    page_number = request.GET.get('page')
+    logs_page = paginator.get_page(page_number)
+
+    return render(request, 'inventory/history.html', {'logs': logs_page, 'employees': employees})
 
 # --- 4. ОСТАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ) ---
 @staff_member_required
@@ -231,30 +312,78 @@ def bulk_issue(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            user = get_object_or_404(User, pk=data.get('employee_id'))
-            for item in data.get('items', []):
-                type_, id_ = item['type'], item['id']
+            employee_id = data.get('employee_id')
+            items = data.get('items', [])
+            user = get_object_or_404(User, pk=employee_id)
+            
+            for item in items:
+                type_ = item['type']
+                id_ = item['id']
+                
                 if type_ == 'tool':
                     tool = ToolInstance.objects.get(pk=id_)
                     if tool.status == 'IN_STOCK':
-                        tool.current_holder = user; tool.current_warehouse = None; tool.status = 'ISSUED'; tool.save()
-                        MovementLog.objects.create(initiator=request.user, action_type='ISSUE', nomenclature=tool.nomenclature, tool_instance=tool, source_warehouse=tool.current_warehouse, target_user=user, comment="Массовая выдача")
+                        # 1. ЗАПОМИНАЕМ СКЛАД ПЕРЕД ВЫДАЧЕЙ
+                        wh_was = tool.current_warehouse
+                        
+                        tool.current_holder = user
+                        tool.current_warehouse = None
+                        tool.status = 'ISSUED'
+                        tool.save()
+                        
+                        # 2. ПИШЕМ В ЛОГ ЗАПОМНЕННЫЙ СКЛАД (wh_was)
+                        MovementLog.objects.create(
+                            initiator=request.user, 
+                            action_type='ISSUE', 
+                            nomenclature=tool.nomenclature, 
+                            tool_instance=tool, 
+                            source_warehouse=wh_was, # <--- БЫЛО tool.current_warehouse (пусто), СТАЛО wh_was
+                            target_user=user, 
+                            comment="Массовая выдача"
+                        )
+
                 elif type_ == 'consumable':
-                    qty = int(item['qty']); balance = ConsumableBalance.objects.get(pk=id_)
+                    qty = int(item['qty'])
+                    balance = ConsumableBalance.objects.get(pk=id_)
                     if balance.quantity >= qty:
-                        balance.quantity -= qty; balance.save()
-                        target, _ = ConsumableBalance.objects.get_or_create(nomenclature=balance.nomenclature, holder=user, defaults={'quantity': 0})
-                        target.quantity += qty; target.save()
-                        MovementLog.objects.create(initiator=request.user, action_type='ISSUE', nomenclature=balance.nomenclature, quantity=qty, source_warehouse=balance.warehouse, target_user=user, comment=f"Массовая выдача ({qty} шт)")
+                        # Запоминаем склад расходника
+                        wh_was = balance.warehouse 
+                        
+                        balance.quantity -= qty
+                        balance.save()
+                        
+                        target_bal, _ = ConsumableBalance.objects.get_or_create(
+                            nomenclature=balance.nomenclature, 
+                            holder=user, 
+                            defaults={'quantity': 0}
+                        )
+                        target_bal.quantity += qty
+                        target_bal.save()
+                        
+                        MovementLog.objects.create(
+                            initiator=request.user, 
+                            action_type='ISSUE', 
+                            nomenclature=balance.nomenclature, 
+                            quantity=qty, 
+                            source_warehouse=wh_was, # Пишем склад
+                            target_user=user, 
+                            comment=f"Массовая выдача ({qty} шт)"
+                        )
+                        
                         if balance.quantity == 0: balance.delete()
+
             return JsonResponse({'status': 'ok'})
-        except Exception as e: return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-    
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    # GET-запрос (отрисовка страницы) остается без изменений
     tools_qs = ToolInstance.objects.filter(status='IN_STOCK', kit__isnull=True, car__isnull=True)
     tools_data = [{'id': t.id, 'type': 'tool', 'name': t.nomenclature.name, 'art': t.nomenclature.article, 'sn': t.inventory_id, 'wh_id': t.current_warehouse.id} for t in tools_qs]
     cons_qs = ConsumableBalance.objects.filter(warehouse__isnull=False)
     cons_data = [{'id': c.id, 'type': 'consumable', 'name': c.nomenclature.name, 'art': c.nomenclature.article, 'max_qty': c.quantity, 'wh_id': c.warehouse.id} for c in cons_qs]
-    return render(request, 'inventory/bulk_issue.html', {'employees': User.objects.filter(is_active=True), 'warehouses': Warehouse.objects.all(), 'tools_json': json.dumps(tools_data), 'consumables_json': json.dumps(cons_data)})
+
+    context = {'employees': User.objects.filter(is_active=True), 'warehouses': Warehouse.objects.all(), 'tools_json': json.dumps(tools_data), 'consumables_json': json.dumps(cons_data)}
+    return render(request, 'inventory/bulk_issue.html', context)
 
 @staff_member_required
 def get_employee_items(request, employee_id):
@@ -317,20 +446,35 @@ def tool_add(request):
             nomenclature = form.cleaned_data['nomenclature']
             warehouse = form.cleaned_data['current_warehouse']
             qty = form.cleaned_data['quantity']
+            
             if nomenclature.item_type == 'TOOL':
                 inv_id = form.cleaned_data['inventory_id']
                 if not inv_id:
                     form.add_error('inventory_id', 'Обязателен S/N!')
                     nom_types = {n.id: n.item_type for n in Nomenclature.objects.all()}
                     return render(request, 'inventory/tool_add.html', {'form': form, 'nomenclature_types_json': json.dumps(nom_types)})
-                tool = form.save(commit=False); tool.save()
+                
+                tool = form.save(commit=False)
+                tool.save()
                 MovementLog.objects.create(initiator=request.user, action_type='RECEIPT', nomenclature=nomenclature, tool_instance=tool, target_warehouse=warehouse, comment="Приход")
+                
+                # СООБЩЕНИЕ ОБ УСПЕХЕ (ИНСТРУМЕНТ)
+                messages.success(request, f"✅ Инструмент «{nomenclature.name}» ({inv_id}) успешно принят!")
+            
             else:
                 balance, _ = ConsumableBalance.objects.get_or_create(nomenclature=nomenclature, warehouse=warehouse, defaults={'quantity': 0})
-                balance.quantity += qty; balance.save()
+                balance.quantity += qty
+                balance.save()
                 MovementLog.objects.create(initiator=request.user, action_type='RECEIPT', nomenclature=nomenclature, target_warehouse=warehouse, quantity=qty, comment=f"Приход ({qty} шт)")
-            return redirect('index')
-    else: form = ToolInstanceForm()
+                
+                # СООБЩЕНИЕ ОБ УСПЕХЕ (РАСХОДНИК)
+                messages.success(request, f"✅ Расходник «{nomenclature.name}» пополнен на {qty} шт.")
+            
+            return redirect('tool_add') 
+
+    else:
+        form = ToolInstanceForm()
+        
     nom_types = {n.id: n.item_type for n in Nomenclature.objects.all()}
     return render(request, 'inventory/tool_add.html', {'form': form, 'nomenclature_types_json': json.dumps(nom_types)})
 

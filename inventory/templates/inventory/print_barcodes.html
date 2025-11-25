@@ -7,9 +7,8 @@
 <style>
     /* СТИЛИ ДЛЯ ЭКРАНА */
     .barcode-card {
-        width: 220px;
         padding: 10px;
-        background: white; /* Белый фон для сканера */
+        background: white; /* Всегда белый для сканера */
         border: 1px solid #ddd;
         border-radius: 4px;
         text-align: center;
@@ -17,17 +16,21 @@
         margin: 5px;
         vertical-align: top;
         position: relative;
+        /* Ширина теперь зависит от контента, но не меньше стандарта */
+        min-width: 150px; 
     }
+    
     .btn-del {
-        position: absolute; top: 2px; right: 2px; 
-        color: red; cursor: pointer; display: none; font-size: 12px;
+        position: absolute; top: 0px; right: 0px; 
+        color: red; cursor: pointer; display: none; font-size: 16px; font-weight: bold;
+        padding: 0 5px;
     }
     .barcode-card:hover .btn-del { display: block; }
 
     /* СТИЛИ ДЛЯ ПЕЧАТИ (Ctrl+P) */
     @media print {
         body * { visibility: hidden; }
-        .navbar, .filter-box, h3, .alert, h5 { display: none !important; }
+        .navbar, .filter-box, h3, .alert, h5, .no-print { display: none !important; }
         
         #printableArea, #printableArea * {
             visibility: visible;
@@ -41,38 +44,48 @@
             border: none !important;
         }
         .barcode-card { 
-            border: 1px dashed #ccc; 
+            border: 1px dashed #ccc; /* Пунктир для ножниц */
             page-break-inside: avoid; 
-            margin: 10px; 
+            margin: 5px; 
             float: left; 
         }
         .btn-del { display: none !important; }
     }
 </style>
 
-<h3 class="mt-2 mb-3">🖨️ Распечатка серийных номеров</h3>
+<h3 class="mt-2 mb-3">🖨️ Распечатка штрихкодов</h3>
 
 <div class="alert alert-info py-2" style="font-size: 0.9em;">
-    Раздел позволяет распечатывать штрихкоды SN. Вводите номера в поле (можно сканером), они будут добавляться в список.
+    Выберите размер этикетки, введите номера (или сканируйте) и нажмите "Добавить".
 </div>
 
 <div class="filter-box">
     <div class="row align-items-end">
-        <div class="col-md-6">
-            <label class="form-label fw-bold small">S/N (вводите каждый с новой строки или сканируйте):</label>
-            <textarea class="form-control" id="snInput" rows="3" placeholder="123456..."></textarea>
+        <div class="col-md-3 border-end">
+            <label class="form-label fw-bold small text-body-secondary">Размер этикетки:</label>
+            <select id="sizeSelect" class="form-select">
+                <option value="small">🔹 Маленький (Отвертки)</option>
+                <option value="medium" selected>🔷 Стандарт (Инструмент)</option>
+                <option value="large">🟦 Большой (Ящики/Крупное)</option>
+            </select>
         </div>
-        <div class="col-md-6">
+
+        <div class="col-md-5">
+            <label class="form-label fw-bold small text-body-secondary">S/N (вводите или сканируйте):</label>
+            <textarea class="form-control" id="snInput" rows="1" placeholder="123456..."></textarea>
+        </div>
+
+        <div class="col-md-4">
             <div class="d-flex gap-2">
-                <button class="btn btn-success" onclick="addBarcodes()">Добавить значения</button>
-                <button class="btn btn-secondary" onclick="clearList()">Очистить</button>
-                <button class="btn btn-primary ms-auto" onclick="window.print()">🖨️ Печать (Ctrl+P)</button>
+                <button class="btn btn-success w-100" onclick="addBarcodes()">Добавить</button>
+                <button class="btn btn-secondary" onclick="clearList()"><i class="fa-solid fa-trash"></i></button>
+                <button class="btn btn-primary w-100" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать</button>
             </div>
         </div>
     </div>
 </div>
 
-<h5 class="mt-4">Список для печати: <span id="count" class="badge bg-secondary">0</span></h5>
+<h5 class="mt-4">Предпросмотр: <span id="count" class="badge bg-secondary">0</span></h5>
 
 <div id="printableArea" class="bg-body-tertiary p-3 border rounded" style="min-height: 200px;">
     <div id="barcodeList"></div>
@@ -84,32 +97,64 @@
         let text = input.value.trim();
         if (!text) return;
 
-        let lines = text.split(/\n/); // Разбиваем по строкам
+        let lines = text.split(/\n/);
         
+        // Получаем выбранный размер
+        let size = document.getElementById('sizeSelect').value;
+
         lines.forEach(sn => {
             sn = sn.trim();
-            if (sn) createBarcode(sn);
+            if (sn) createBarcode(sn, size);
         });
 
-        input.value = ''; // Очищаем поле
+        input.value = '';
         updateCount();
+        input.focus(); // Возвращаем фокус для сканера
     }
 
-    function createBarcode(sn) {
+    function createBarcode(sn, size) {
+        // Настройки для разных размеров
+        let options = {
+            format: "CODE128",
+            displayValue: true,
+            textMargin: 0,
+            fontOptions: "bold",
+            lineColor: "#000"
+        };
+
+        if (size === 'small') {
+            options.width = 1.2;  // Тонкие линии
+            options.height = 25;  // Низкий
+            options.fontSize = 11; // Мелкий шрифт
+            options.margin = 5;
+        } else if (size === 'medium') {
+            options.width = 2;
+            options.height = 40;
+            options.fontSize = 14;
+            options.margin = 10;
+        } else if (size === 'large') {
+            options.width = 3;    // Жирные линии
+            options.height = 70;  // Высокий
+            options.fontSize = 20; // Крупный шрифт
+            options.margin = 15;
+        }
+
         let div = document.createElement('div');
         div.className = 'barcode-card';
+        
+        // Кнопка удаления
         div.innerHTML = `
-            <div class="btn-del" onclick="this.parentElement.remove(); updateCount();">❌</div>
-            <svg class="barcode"
-                jsbarcode-format="CODE128"
-                jsbarcode-value="${sn}"
-                jsbarcode-textmargin="0"
-                jsbarcode-fontoptions="bold">
-            </svg>
+            <div class="btn-del" onclick="this.parentElement.remove(); updateCount();" title="Удалить">×</div>
+            <svg class="barcode"></svg>
         `;
+        
         document.getElementById('barcodeList').appendChild(div);
+        
+        // Генерация
         try {
-            JsBarcode(div.querySelector('svg')).init();
+            // Добавляем значение SN в настройки
+            options.value = sn;
+            JsBarcode(div.querySelector('svg'), sn, options);
         } catch (e) {
             div.innerHTML += '<div class="text-danger small">Ошибка кода</div>';
         }
@@ -126,7 +171,7 @@
         document.getElementById('count').innerText = document.getElementById('barcodeList').children.length;
     }
     
-    // Добавление по Enter (удобно для сканера)
+    // Enter работает как "Добавить"
     document.getElementById('snInput').addEventListener('keypress', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();

@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import Nomenclature, ToolInstance, ToolKit, Warehouse, Car
+from .models import Nomenclature, ToolInstance, ToolKit, Warehouse, Car, News
 
 # 1. Форма для создания ВИДА товара (Справочник)
 class NomenclatureForm(forms.ModelForm):
@@ -14,7 +14,7 @@ class NomenclatureForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
-# 2. Форма для ПРИХОДА (Универсальная)
+# 2. Форма для ПРИХОДА (С УМНОЙ ПРОВЕРКОЙ СКЛАДА)
 class ToolInstanceForm(forms.ModelForm):
     quantity = forms.IntegerField(
         label='Количество', 
@@ -43,12 +43,23 @@ class ToolInstanceForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-select'}),
             'condition': forms.Select(attrs={'class': 'form-select'}),
         }
+        error_messages = {
+            'inventory_id': {
+                'unique': "Такой товар уже есть в системе! (Инвентарный номер должен быть уникальным)",
+            }
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['inventory_id'].required = False
+        
+        # ЛОГИКА: Если это создание НОВОГО товара (нет pk), то склад ОБЯЗАТЕЛЕН.
+        # Если редактирование (pk есть) — оставляем как есть (может быть пусто, если выдано).
+        if not self.instance.pk:
+            self.fields['current_warehouse'].required = True
+            self.fields['current_warehouse'].label = "На какой склад принять (Обязательно)"
 
-# 3. Форма сотрудника (С ПЕРЕВОДОМ)
+# 3. Форма сотрудника
 class EmployeeForm(forms.ModelForm):
     new_password = forms.CharField(
         label='Новый пароль',
@@ -141,4 +152,16 @@ class CarForm(forms.ModelForm):
             'insurance_expiry': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'checklist': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+
+# 7. Форма Новости
+class NewsForm(forms.ModelForm):
+    class Meta:
+        model = News
+        fields = ['title', 'text', 'is_important']
+        labels = {'title': 'Заголовок', 'text': 'Текст', 'is_important': 'Пометить как ВАЖНУЮ'}
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control'}),
+            'text': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_important': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }

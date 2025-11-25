@@ -192,3 +192,14 @@ class MovementLog(models.Model):
 
     def __str__(self): return f"{self.date} - {self.get_action_type_display()}"
     class Meta: verbose_name = "Запись в журнале"; verbose_name_plural = "Журнал движений"
+    
+# --- 5. НОВОСТИ ---
+class News(models.Model):
+    title = models.CharField("Заголовок", max_length=200)
+    text = models.TextField("Текст новости")
+    date = models.DateTimeField("Дата публикации", auto_now_add=True)
+    is_important = models.BooleanField("Важная новость (красная)", default=False)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Автор")
+
+    def __str__(self): return self.title
+    class Meta: verbose_name = "Новость"; verbose_name_plural = "Новости"

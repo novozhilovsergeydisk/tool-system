@@ -3,55 +3,70 @@
 {% block content %}
 <div class="row justify-content-center mt-4">
     <div class="col-md-6">
-        <div class="card shadow">
+        <div class="card shadow-sm">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fa-solid fa-box-open"></i> Приход товара</h5>
+                <h4 class="mb-0"><i class="fa-solid fa-plus"></i> Приход товара</h4>
             </div>
             <div class="card-body">
                 <form method="post">
                     {% csrf_token %}
                     
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ form.nomenclature.label }}</label>
+                        <label class="form-label fw-bold">Что принимаем (Номенклатура)</label>
                         {{ form.nomenclature }}
+                        <div class="form-text text-end">
+                            <a href="{% url 'nomenclature_list' %}" target="_blank" class="text-decoration-none">
+                                <i class="fa-solid fa-list"></i> Нет в списке? Создать
+                            </a>
+                        </div>
                     </div>
 
-                    <div class="mb-3" id="block-sn">
-                        <label class="form-label fw-bold">{{ form.inventory_id.label }}</label>
+                    <div class="mb-3" id="block-inv">
+                        <label class="form-label fw-bold">Инвентарный номер / S/N</label>
                         {{ form.inventory_id }}
-                        <div class="form-text">Обязательно для инструментов</div>
+                        
+                        {% if form.inventory_id.errors %}
+                            <div class="alert alert-danger mt-2 py-2 small">
+                                <i class="fa-solid fa-triangle-exclamation"></i> {{ form.inventory_id.errors|striptags }}
+                            </div>
+                        {% endif %}
                     </div>
 
-                    <div class="mb-3" id="block-qty" style="display: none;">
-                        <label class="form-label fw-bold">{{ form.quantity.label }}</label>
+                    <div class="mb-3" id="block-qty" style="display:none;">
+                        <label class="form-label fw-bold">Количество</label>
                         {{ form.quantity }}
-                        <div class="form-text">Укажите объем поступления</div>
                     </div>
-
+                    
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ form.current_warehouse.label }}</label>
+                        <label class="form-label fw-bold">На какой склад принять</label>
                         {{ form.current_warehouse }}
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ form.purchase_date.label }}</label>
+                        <label class="form-label fw-bold">Дата покупки</label>
                         {{ form.purchase_date }}
                     </div>
 
-                    <div id="block-status">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">{{ form.status.label }}</label>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Статус</label>
                             {{ form.status }}
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">{{ form.condition.label }}</label>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Состояние</label>
                             {{ form.condition }}
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-between mt-4">
-                        <a href="{% url 'nomenclature_list' %}" class="btn btn-secondary">Отмена</a>
-                        <button type="submit" class="btn btn-success">Принять на склад</button>
+                        <a href="{% url 'tool_list' %}" class="btn btn-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-success fw-bold px-4">Принять на склад</button>
                     </div>
                 </form>
             </div>
@@ -60,36 +75,28 @@
 </div>
 
 <script>
-    // Получаем данные из Python (Словарь ID -> Тип)
     const nomTypes = {{ nomenclature_types_json|safe }};
-    
-    const selectNom = document.getElementById('id_nomenclature');
-    const blockSn = document.getElementById('block-sn');
+    const select = document.getElementById('id_nomenclature');
+    const blockInv = document.getElementById('block-inv');
     const blockQty = document.getElementById('block-qty');
-    const blockStatus = document.getElementById('block-status');
 
     function toggleFields() {
-        const selectedId = selectNom.value;
-        const type = nomTypes[selectedId]; // Получаем тип (TOOL или CONSUMABLE)
-
-        if (type === 'CONSUMABLE') {
-            // Если Расходник:
-            blockSn.style.display = 'none';       // Скрываем S/N
-            blockStatus.style.display = 'none';   // Скрываем Статус/Состояние
-            blockQty.style.display = 'block';     // Показываем Количество
-            document.getElementById('id_inventory_id').value = ''; // Очищаем S/N
-        } else {
-            // Если Инструмент (или ничего не выбрано):
-            blockSn.style.display = 'block';
-            blockStatus.style.display = 'block';
+        const val = select.value;
+        // Если ничего не выбрано или это ИНСТРУМЕНТ (TOOL)
+        if (!val || nomTypes[val] === 'TOOL') {
+            blockInv.style.display = 'block';
             blockQty.style.display = 'none';
+        } 
+        // Если это РАСХОДНИК (CONSUMABLE)
+        else {
+            blockInv.style.display = 'none';
+            blockQty.style.display = 'block';
         }
     }
 
-    // Слушаем изменения
-    selectNom.addEventListener('change', toggleFields);
-    
-    // Запускаем один раз при загрузке (если форма вернулась с ошибкой)
-    toggleFields();
+    if (select) {
+        select.addEventListener('change', toggleFields);
+        toggleFields(); // Запуск при загрузке
+    }
 </script>
 {% endblock %}
