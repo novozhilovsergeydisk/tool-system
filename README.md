@@ -5,6 +5,7 @@
 ### Предварительные требования
 - Сервер с Ubuntu/Debian или аналогичной ОС
 - Python 3.8+
+- PostgreSQL
 - Nginx
 - Virtualenv
 - Git
@@ -18,7 +19,7 @@
 1. **Установка предварительных пакетов:**
    ```
    sudo apt update
-   sudo apt install python3 python3-venv python3-pip nginx git supervisor certbot python3-certbot-nginx
+   sudo apt install python3 python3-venv python3-pip postgresql postgresql-contrib nginx git supervisor certbot python3-certbot-nginx
    ```
 
 2. **Клонирование репозитория:**
@@ -42,7 +43,15 @@
    ```
 
 5. **Настройка базы данных:**
-   Если у вас есть существующая база данных (файл db.sqlite3), скопируйте её на сервер в корневую папку проекта (/var/www/tool-system/db.sqlite3). В противном случае выполните миграции для создания новой базы.
+   Создайте пользователя и базу данных PostgreSQL:
+   ```
+   sudo -u postgres psql
+   CREATE USER tool_user WITH PASSWORD 'your-password';
+   CREATE DATABASE tool_system OWNER tool_user;
+   GRANT ALL PRIVILEGES ON DATABASE tool_system TO tool_user;
+   \q
+   ```
+   Выполните миграции для создания таблиц:
    ```
    python manage.py migrate
    python manage.py collectstatic --noinput
@@ -170,44 +179,67 @@
    ```
 
 ### Настройка базы данных
-1. Выполните миграции:
+1. Убедитесь, что PostgreSQL установлен и запущен.
+
+2. Создайте пользователя и базу данных (если не сделали ранее):
+   ```
+   sudo -u postgres psql
+   CREATE USER tool_user WITH PASSWORD 'your-password';
+   CREATE DATABASE tool_system OWNER tool_user;
+   GRANT ALL PRIVILEGES ON DATABASE tool_system TO tool_user;
+   \q
+   ```
+
+3. Выполните миграции:
    ```
    python manage.py migrate
    ```
 
-2. Соберите статические файлы:
+4. Соберите статические файлы:
     ```
     python manage.py collectstatic --noinput
     ```
     
 ## Локальная разработка
 
-1. Создайте виртуальное окружение:
+1. Создайте файл .env в корне проекта и добавьте переменные окружения:
+    ```
+    SECRET_KEY=your-secret-key
+    DEBUG=True
+    ALLOWED_HOSTS=localhost,127.0.0.1
+    DB_NAME=tool_system
+    DB_USER=tool_user
+    DB_PASSWORD=your-password
+    DB_HOST=localhost
+    DB_PORT=5432
+    ```
+
+2. Создайте виртуальное окружение:
     ```
     python3 -m venv venv
     ```
 
-2. Активируйте виртуальное окружение:
+3. Активируйте виртуальное окружение:
     ```
     source venv/bin/activate
     ```
 
-3. Установите зависимости:
+4. Установите зависимости:
     ```
     pip install -r requirements.txt
     ```
 
-4. Выполните миграции базы данных:
+5. Выполните миграции базы данных:
     ```
     python manage.py migrate
     ```
 
-5. Создайте суперпользователя (опционально, для доступа к админке):
+6. Создайте суперпользователя (опционально, для доступа к админке):
     ```
     python manage.py createsuperuser
     ```
 
-6. Запустите сервер разработки:
+7. Запустите сервер разработки:
     ```
     python manage.py runserver
     ```
