@@ -9,3 +9,4 @@ __pycache__/
 *.pyc
 db.sqlite3
 code_inspection_recommendations.txt
+deploy.log
