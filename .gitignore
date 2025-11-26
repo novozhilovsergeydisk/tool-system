@@ -8,3 +8,4 @@ tool_system.zip
 __pycache__/
 *.pyc
 db.sqlite3
+code_inspection_recommendations.txt

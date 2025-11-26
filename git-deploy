@@ -1,0 +1,234 @@
+#!/bin/bash
+
+# === Простой скрипт развертывания ===
+# Использование: ./git-deploy "Ваш комментарий"
+
+# === Настройки ===
+PROJECT_DIR="$(pwd)"
+LOGFILE="$PROJECT_DIR/deploy.log"
+
+# === Цвета для вывода ===
+GREEN='\033[32m'
+BLUE='\033[34m'
+YELLOW='\033[33m'
+RED='\033[31m'
+NC='\033[0m' # No Color
+
+
+
+# === Логирование и вывод в терминал ===
+log() {
+  local level="$1"
+  local message="$2"
+  echo -e "$(date "+%Y-%m-%d %T") [$level] $message" | tee -a "$LOGFILE"
+}
+
+info() {
+  echo -e "${BLUE}[*] $1${NC}" | tee -a "$LOGFILE"
+}
+
+success() {
+  echo -e "${GREEN}[✓] $1${NC}" | tee -a "$LOGFILE"
+}
+
+warn() {
+  echo -e "${YELLOW}[!] $1${NC}" | tee -a "$LOGFILE"
+}
+
+error() {
+  echo -e "${RED}[✗] $1${NC}" | tee -a "$LOGFILE"
+}
+
+# === Определение типа проекта ===
+detect_project_type() {
+  # Проверяем файлы в порядке специфичности
+  if [ -f "package.json" ]; then
+    echo "nodejs"
+  elif [ -f "requirements.txt" ] || [ -f "setup.py" ] || [ -f "Pipfile" ] || [ -f "pyproject.toml" ] || [ -f "poetry.lock" ]; then
+    echo "python"
+  elif [ -f "composer.json" ] || [ -f "artisan" ]; then
+    echo "php"
+  elif [ -f "Gemfile" ] || [ -f "config/application.rb" ]; then
+    echo "ruby"
+  elif [ -f "go.mod" ] || [ -f "go.sum" ] || [ -f "main.go" ]; then
+    echo "go"
+  elif [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+    echo "java"
+  elif [ -f "*.csproj" ] 2>/dev/null || [ -f "*.fsproj" ] 2>/dev/null || [ -f "*.vbproj" ] 2>/dev/null || [ -d ".nuget" ]; then
+    echo "dotnet"
+  elif [ -f "Cargo.toml" ] || [ -f "Cargo.lock" ]; then
+    echo "rust"
+  elif [ -f "Makefile" ] || [ -f "CMakeLists.txt" ]; then
+    echo "c-cpp"
+  elif [ -f "Dockerfile" ]; then
+    echo "docker"
+  else
+    echo "generic"
+  fi
+}
+
+# === Пост-деплой действия для разных типов проектов ===
+post_deploy_actions() {
+  local project_type="$1"
+
+  case "$project_type" in
+    "nodejs")
+      if command -v npm >/dev/null 2>&1; then
+        info "Устанавливаем зависимости Node.js..."
+        npm install
+        if npm run | grep -q "build"; then
+          info "Собираем проект..."
+          npm run build
+        fi
+      fi
+      ;;
+
+    "python")
+      if command -v pip >/dev/null 2>&1 || command -v pip3 >/dev/null 2>&1; then
+        local pip_cmd="pip"
+        command -v pip3 >/dev/null 2>&1 && pip_cmd="pip3"
+
+        if [ -f "requirements.txt" ]; then
+          info "Устанавливаем зависимости Python..."
+          $pip_cmd install -r requirements.txt
+        fi
+
+        # Django specific
+        if [ -f "manage.py" ] && command -v python >/dev/null 2>&1; then
+          info "Выполняем миграции Django..."
+          python manage.py migrate --noinput
+          python manage.py collectstatic --noinput
+        fi
+      fi
+      ;;
+
+    "php")
+      if command -v composer >/dev/null 2>&1; then
+        info "Устанавливаем зависимости PHP..."
+        composer install --no-dev --optimize-autoloader
+
+        if [ -f "artisan" ] && command -v php >/dev/null 2>&1; then
+          info "Очищаем кэш Laravel..."
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan config:clear
+        fi
+      fi
+      ;;
+
+    "ruby")
+      if command -v bundle >/dev/null 2>&1; then
+        info "Устанавливаем зависимости Ruby..."
+        bundle install
+
+        if [ -f "config/application.rb" ] && command -v rails >/dev/null 2>&1; then
+          info "Выполняем миграции Rails..."
+          rails db:migrate
+          rails assets:precompile
+        fi
+      fi
+      ;;
+
+    "go")
+      if command -v go >/dev/null 2>&1; then
+        info "Собираем Go проект..."
+        go mod download
+        go build -o app .
+      fi
+      ;;
+
+    "java")
+      if [ -f "pom.xml" ] && command -v mvn >/dev/null 2>&1; then
+        info "Собираем Java проект..."
+        mvn clean package -DskipTests
+      elif [ -f "build.gradle" ] && command -v gradle >/dev/null 2>&1; then
+        info "Собираем Gradle проект..."
+        gradle build
+      elif [ -f "gradlew" ]; then
+        info "Собираем проект с Gradle Wrapper..."
+        ./gradlew build
+      fi
+      ;;
+
+    "dotnet")
+      if command -v dotnet >/dev/null 2>&1; then
+        info "Собираем .NET проект..."
+        dotnet restore
+        dotnet publish -c Release -o ./publish
+      fi
+      ;;
+
+    "rust")
+      if command -v cargo >/dev/null 2>&1; then
+        info "Собираем Rust проект..."
+        cargo build --release
+      fi
+      ;;
+
+    "c-cpp")
+      if [ -f "Makefile" ] && command -v make >/dev/null 2>&1; then
+        info "Собираем C/C++ проект..."
+        make clean && make
+      elif [ -f "CMakeLists.txt" ] && command -v cmake >/dev/null 2>&1; then
+        info "Собираем CMake проект..."
+        mkdir -p build && cd build && cmake .. && make
+      fi
+      ;;
+
+    "docker")
+      if command -v docker-compose >/dev/null 2>&1 && [ -f "docker-compose.yml" ]; then
+        info "Собираем Docker контейнеры..."
+        docker-compose build
+      elif command -v docker >/dev/null 2>&1 && [ -f "Dockerfile" ]; then
+        info "Собираем Docker образ..."
+        docker build -t "$(basename "$PWD")" .
+      fi
+      ;;
+
+    *)
+      if [ -f "deploy.sh" ]; then
+        info "Запускаем пользовательский скрипт развертывания..."
+        bash deploy.sh
+      elif [ -f "build.sh" ]; then
+        info "Запускаем скрипт сборки..."
+        bash build.sh
+      fi
+      ;;
+  esac
+}
+
+# === Проверка ===
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  error "Это не git репозиторий"
+  exit 1
+fi
+
+if [ -z "$1" ]; then
+  error "Укажите комментарий: ./git-deploy \"Ваш комментарий\""
+  exit 1
+fi
+
+COMMENT="$1"
+PROJECT_TYPE=$(detect_project_type)
+
+# === Начало работы ===
+mkdir -p "$(dirname "$LOGFILE")"
+log "INFO" "Развертывание проекта типа '$PROJECT_TYPE'"
+
+# === Git операции ===
+info "Добавляем изменения..."
+git add .
+
+info "Создаем коммит..."
+if ! git commit -m "$COMMENT" 2>/dev/null; then
+  warn "Нет изменений для коммита"
+  exit 0
+fi
+
+info "Отправляем в репозиторий..."
+git push
+
+# === Пост-деплой действия ===
+post_deploy_actions "$PROJECT_TYPE"
+
+success "✅ Развертывание завершено!"
