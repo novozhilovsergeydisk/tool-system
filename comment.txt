@@ -1,7 +1,0 @@
-feat: добавить поддержку PostgreSQL и обновить документацию
-
-- Переход с SQLite на PostgreSQL в настройках базы данных
-- Добавление psycopg2-binary в зависимости
-- Обновление README.md с инструкциями по настройке PostgreSQL и локальной разработке
-- Добавление comment.txt и plan.txt в .gitignore
-- Удаление старого файла comment.txt

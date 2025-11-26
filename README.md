@@ -141,23 +141,28 @@
     source venv/bin/activate
     ```
 
-3. **Если модели изменились, создайте и примените миграции:**
+3. **Обновите зависимости:**
+    ```
+    pip install -r requirements.txt
+    ```
+
+4. **Если модели изменились, создайте и примените миграции:**
     ```
     python manage.py makemigrations
     python manage.py migrate
     ```
 
-4. **Соберите статические файлы:**
+5. **Соберите статические файлы:**
     ```
     python manage.py collectstatic --noinput
     ```
 
-5. **Перезапустите Gunicorn:**
+6. **Перезапустите Gunicorn:**
     ```
     sudo systemctl restart tool-system
     ```
 
-6. **Если нужно создать нового суперпользователя (админа):**
+7. **Если нужно создать нового суперпользователя (админа):**
     ```
     python manage.py createsuperuser
     ```

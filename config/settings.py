@@ -10,26 +10,27 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import os
 from pathlib import Path
+import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env file
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY', 'your_secret_key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -77,20 +78,49 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# config/settings.py
+
+# ... (где-то в начале или середине файла)
+
+# 1. ПОДДЕРЖКА ХЕШЕЙ ПАРОЛЕЙ (Node.js использует bcrypt)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+]
+
+# 2. БАЗЫ ДАННЫХ
+    # Основная база (storage.lan-install)
+DATABASE_ROUTERS = ['inventory.routers.LegacyRouter'] # Скрипт запрещающий Django Трогать БД lan-install
 DATABASES = {
-    'default_old': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
+    # Основная база (tool_system)
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'tool_system'),
-        'USER': os.getenv('DB_USER', 'tool_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'NAME': os.getenv('DB_NAME', 'your_db_name'),
+        'USER': os.getenv('DB_USER', 'your_db_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'your_db_password'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
+    },
+    # Вторая база (lan-install)
+    'legacy': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('ALT_DB_NAME', 'your_db_name'),
+        'USER': os.getenv('ALT_DB_USER', 'your_db_user'),
+        'PASSWORD': os.getenv('ALT_DB_PASSWORD', 'your_db_password'),
+        'HOST': os.getenv('ALT_DB_HOST', 'localhost'),
+        'PORT': os.getenv('ALT_DB_PORT', '5432'),
     }
 }
+
+# 3. БЭКЕНДЫ АВТОРИЗАЦИИ (Порядок важен!)
+AUTHENTICATION_BACKENDS = [
+    'inventory.backends.NodeAuthBackend',       # Наш кастомный (проверяет старую базу)
+    'django.contrib.auth.backends.ModelBackend', # Стандартный (проверяет новую базу)
+]
+
+# ...
 
 
 # Password validation
@@ -128,7 +158,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
