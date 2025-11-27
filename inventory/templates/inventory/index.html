@@ -19,12 +19,67 @@
     </div>
 </div>
 
+{% if user.is_staff and alerts %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-body-tertiary d-flex align-items-center">
+        <h5 class="mb-0 text-body-secondary">
+            <i class="fa-solid fa-bell text-warning me-2"></i> Требует внимания ({{ alerts|length }})
+        </h5>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for alert in alerts %}
+            
+            {% if alert.link %}
+                <a href="{{ alert.link }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-start border-4 border-{{ alert.type }}">
+                    <div class="d-flex align-items-start w-100">
+                        <div class="me-3 mt-1">
+                             <i class="fa-solid {{ alert.icon }} text-{{ alert.type }}" style="font-size: 1.2rem;"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-body-emphasis">{{ alert.text }}</div>
+                            {% if alert.details_list %}
+                                <ul class="mb-0 ps-3 small text-body-secondary mt-1">
+                                    {% for item in alert.details_list %}
+                                        <li>{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="badge bg-body-tertiary text-body-secondary rounded-pill border"><i class="fa-solid fa-chevron-right"></i></span>
+                </a>
+
+            {% else %}
+                <div class="list-group-item border-start border-4 border-{{ alert.type }}">
+                    <div class="d-flex align-items-start">
+                        <div class="me-3 mt-1">
+                             <i class="fa-solid {{ alert.icon }} text-{{ alert.type }}" style="font-size: 1.2rem;"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-body-emphasis">{{ alert.text }}</div>
+                            {% if alert.details_list %}
+                                <ul class="mb-0 ps-3 small text-body-secondary mt-1">
+                                    {% for item in alert.details_list %}
+                                        <li>{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-8">
         
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fa-solid fa-bullhorn text-warning"></i> Новости и объявления</h5>
+                <h5 class="mb-0"><i class="fa-solid fa-bullhorn text-info"></i> Новости и объявления</h5>
                 {% if user.is_staff %}
                 <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addNewsModal">
                     <i class="fa-solid fa-plus"></i> Добавить
@@ -40,13 +95,13 @@
                         </h5>
                         <small class="text-body-secondary">{{ news.date|date:"d.m H:i" }}</small>
                     </div>
-                    <p class="mb-1">{{ news.text|linebreaksbr }}</p>
-                    <small class="text-body-secondary">Автор: {{ news.author.get_full_name|default:news.author.username }}</small>
+                    <p class="mb-1 text-body-secondary">{{ news.text|linebreaksbr }}</p>
+                    <small class="text-body-tertiary">Автор: {{ news.author.get_full_name|default:news.author.username }}</small>
                     
                     {% if user.is_staff %}
                     <form action="{% url 'news_delete' news.id %}" method="post" class="d-inline float-end">
                         {% csrf_token %}
-                        <button class="btn btn-link btn-sm text-danger p-0 border-0" onclick="return confirm('Удалить новость?');"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn btn-link btn-sm text-danger p-0 border-0" onclick="return confirm('Удалить новость?');" title="Удалить"><i class="fa-solid fa-trash"></i></button>
                     </form>
                     {% endif %}
                 </div>
@@ -135,7 +190,7 @@
                     </li>
                 </ul>
             </div>
-            </div>
+        </div>
     </div>
 </div>
 

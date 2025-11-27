@@ -16,6 +16,7 @@ class Nomenclature(models.Model):
     article = models.CharField("Артикул", max_length=50, unique=True)
     item_type = models.CharField("Тип", max_length=20, choices=TYPE_CHOICES)
     description = models.TextField("Описание", blank=True)
+    minimum_stock = models.PositiveIntegerField("Минимальный остаток", default=0, help_text="Если остаток на складах упадет ниже этого числа, появится уведомление. 0 = не отслеживать.")
     def __str__(self): return f"{self.name} ({self.article})"
     class Meta: verbose_name = "Номенклатура"; verbose_name_plural = "Номенклатура"
 

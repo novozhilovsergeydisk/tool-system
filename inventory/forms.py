@@ -6,15 +6,23 @@ from .models import Nomenclature, ToolInstance, ToolKit, Warehouse, Car, News
 class NomenclatureForm(forms.ModelForm):
     class Meta:
         model = Nomenclature
-        fields = ['name', 'article', 'item_type', 'description']
+        fields = ['name', 'article', 'item_type', 'minimum_stock', 'description']
+        labels = {
+            'name': 'Название',
+            'article': 'Артикул',
+            'item_type': 'Тип (Инструмент/Расходник)',
+            'minimum_stock': 'Минимальный остаток (для уведомлений)',
+            'description': 'Описание'
+        }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'article': forms.TextInput(attrs={'class': 'form-control'}),
             'item_type': forms.Select(attrs={'class': 'form-select'}),
+            'minimum_stock': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
-# 2. Форма для ПРИХОДА (С УМНОЙ ПРОВЕРКОЙ СКЛАДА)
+# 2. Форма для ПРИХОДА (УПРОЩЕННАЯ)
 class ToolInstanceForm(forms.ModelForm):
     quantity = forms.IntegerField(
         label='Количество', 
@@ -26,21 +34,18 @@ class ToolInstanceForm(forms.ModelForm):
 
     class Meta:
         model = ToolInstance
-        fields = ['nomenclature', 'inventory_id', 'current_warehouse', 'purchase_date', 'status', 'condition']
+        # УБРАЛИ: 'purchase_date', 'status'
+        fields = ['nomenclature', 'inventory_id', 'current_warehouse', 'condition']
         labels = {
-            'nomenclature': 'Что это (Номенклатура)',
+            'nomenclature': 'Что принимаем (Номенклатура)',
             'inventory_id': 'Инвентарный номер / S/N',
             'current_warehouse': 'На какой склад принять',
-            'purchase_date': 'Дата покупки',
-            'status': 'Статус',
-            'condition': 'Состояние'
+            'condition': 'Состояние (для инструмента)'
         }
         widgets = {
             'nomenclature': forms.Select(attrs={'class': 'form-select', 'id': 'id_nomenclature'}),
             'inventory_id': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_inventory_id'}),
             'current_warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'status': forms.Select(attrs={'class': 'form-select'}),
             'condition': forms.Select(attrs={'class': 'form-select'}),
         }
         error_messages = {
@@ -53,8 +58,6 @@ class ToolInstanceForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['inventory_id'].required = False
         
-        # ЛОГИКА: Если это создание НОВОГО товара (нет pk), то склад ОБЯЗАТЕЛЕН.
-        # Если редактирование (pk есть) — оставляем как есть (может быть пусто, если выдано).
         if not self.instance.pk:
             self.fields['current_warehouse'].required = True
             self.fields['current_warehouse'].label = "На какой склад принять (Обязательно)"

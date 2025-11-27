@@ -5,10 +5,9 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
 <style>
-    /* СТИЛИ ДЛЯ ЭКРАНА */
     .barcode-card {
         padding: 10px;
-        background: white; /* Всегда белый для сканера */
+        background: white;
         border: 1px solid #ddd;
         border-radius: 4px;
         text-align: center;
@@ -16,7 +15,6 @@
         margin: 5px;
         vertical-align: top;
         position: relative;
-        /* Ширина теперь зависит от контента, но не меньше стандарта */
         min-width: 150px; 
     }
     
@@ -27,28 +25,12 @@
     }
     .barcode-card:hover .btn-del { display: block; }
 
-    /* СТИЛИ ДЛЯ ПЕЧАТИ (Ctrl+P) */
     @media print {
         body * { visibility: hidden; }
         .navbar, .filter-box, h3, .alert, h5, .no-print { display: none !important; }
-        
-        #printableArea, #printableArea * {
-            visibility: visible;
-        }
-        #printableArea {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: white !important;
-            border: none !important;
-        }
-        .barcode-card { 
-            border: 1px dashed #ccc; /* Пунктир для ножниц */
-            page-break-inside: avoid; 
-            margin: 5px; 
-            float: left; 
-        }
+        #printableArea, #printableArea * { visibility: visible; }
+        #printableArea { position: absolute; left: 0; top: 0; width: 100%; background: white !important; border: none !important; }
+        .barcode-card { border: 1px dashed #ccc; page-break-inside: avoid; margin: 5px; float: left; }
         .btn-del { display: none !important; }
     }
 </style>
@@ -57,6 +39,7 @@
 
 <div class="alert alert-info py-2" style="font-size: 0.9em;">
     Выберите размер этикетки, введите номера (или сканируйте) и нажмите "Добавить".
+    <br><strong>Разрешены только латинские буквы и цифры! (Регистр не важен)</strong>
 </div>
 
 <div class="filter-box">
@@ -77,9 +60,9 @@
 
         <div class="col-md-4">
             <div class="d-flex gap-2">
-                <button class="btn btn-success w-100" onclick="addBarcodes()">Добавить</button>
-                <button class="btn btn-secondary" onclick="clearList()"><i class="fa-solid fa-trash"></i></button>
-                <button class="btn btn-primary w-100" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать</button>
+                <button class="btn btn-success w-100" id="btnAdd" onclick="addBarcodes()">Добавить</button>
+                <button class="btn btn-secondary" id="btnClear" onclick="safeClear()"><i class="fa-solid fa-trash"></i></button>
+                <button class="btn btn-secondary w-100" id="btnPrint" onclick="safePrint()"><i class="fa-solid fa-print"></i> Печать</button>
             </div>
         </div>
     </div>
@@ -92,92 +75,116 @@
 </div>
 
 <script>
+    const VALID_SN_REGEX = /^[a-zA-Z0-9]+$/;
+
+    function showNotification(elementId, message) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        const oldTooltip = bootstrap.Tooltip.getInstance(element);
+        if (oldTooltip) oldTooltip.dispose();
+        const tooltip = new bootstrap.Tooltip(element, { title: message, trigger: 'manual', placement: 'top' });
+        tooltip.show();
+        setTimeout(() => { tooltip.hide(); element.addEventListener('hidden.bs.tooltip', () => { tooltip.dispose(); }, { once: true }); }, 2000);
+    }
+
     function addBarcodes() {
         let input = document.getElementById('snInput');
-        let text = input.value.trim();
-        if (!text) return;
+        let rawText = input.value;
 
-        let lines = text.split(/\n/);
-        
-        // Получаем выбранный размер
+        if (!rawText || rawText.trim() === "") {
+            showNotification('snInput', "Введите S/N!");
+            input.focus();
+            return;
+        }
+
+        let lines = rawText.split(/\n/);
         let size = document.getElementById('sizeSelect').value;
+        let hasErrors = false;
 
-        lines.forEach(sn => {
-            sn = sn.trim();
-            if (sn) createBarcode(sn, size);
+        lines.forEach(line => {
+            // ИСПРАВЛЕНО: .toUpperCase()
+            let sn = line.trim().toUpperCase();
+            
+            if (sn) {
+                if (!VALID_SN_REGEX.test(sn)) {
+                    showNotification('snInput', `Недопустимые символы: "${sn}"`);
+                    hasErrors = true;
+                } else {
+                    createBarcode(sn, size);
+                }
+            }
         });
 
-        input.value = '';
+        if (!hasErrors) {
+            input.value = '';
+        }
         updateCount();
-        input.focus(); // Возвращаем фокус для сканера
+        input.focus();
     }
 
     function createBarcode(sn, size) {
-        // Настройки для разных размеров
-        let options = {
-            format: "CODE128",
-            displayValue: true,
-            textMargin: 0,
-            fontOptions: "bold",
-            lineColor: "#000"
-        };
+        let options = { format: "CODE128", displayValue: true, textMargin: 0, fontOptions: "bold", lineColor: "#000" };
 
-        if (size === 'small') {
-            options.width = 1.2;  // Тонкие линии
-            options.height = 25;  // Низкий
-            options.fontSize = 11; // Мелкий шрифт
-            options.margin = 5;
-        } else if (size === 'medium') {
-            options.width = 2;
-            options.height = 40;
-            options.fontSize = 14;
-            options.margin = 10;
-        } else if (size === 'large') {
-            options.width = 3;    // Жирные линии
-            options.height = 70;  // Высокий
-            options.fontSize = 20; // Крупный шрифт
-            options.margin = 15;
-        }
+        if (size === 'small') { options.width = 1.2; options.height = 25; options.fontSize = 11; options.margin = 5; } 
+        else if (size === 'medium') { options.width = 2; options.height = 40; options.fontSize = 14; options.margin = 10; } 
+        else if (size === 'large') { options.width = 3; options.height = 70; options.fontSize = 20; options.margin = 15; }
 
         let div = document.createElement('div');
         div.className = 'barcode-card';
-        
-        // Кнопка удаления
-        div.innerHTML = `
-            <div class="btn-del" onclick="this.parentElement.remove(); updateCount();" title="Удалить">×</div>
-            <svg class="barcode"></svg>
-        `;
+        div.innerHTML = `<div class="btn-del" onclick="removeBarcode(this)" title="Удалить">×</div><svg class="barcode"></svg>`;
         
         document.getElementById('barcodeList').appendChild(div);
         
-        // Генерация
         try {
-            // Добавляем значение SN в настройки
             options.value = sn;
             JsBarcode(div.querySelector('svg'), sn, options);
         } catch (e) {
-            div.innerHTML += '<div class="text-danger small">Ошибка кода</div>';
+            div.innerHTML += '<div class="text-danger small">Ошибка генерации</div>';
         }
     }
 
-    function clearList() {
-        if(confirm('Очистить весь список?')) {
-            document.getElementById('barcodeList').innerHTML = '';
-            updateCount();
-        }
+    function removeBarcode(btn) {
+        btn.parentElement.remove();
+        updateCount();
+    }
+
+    function safeClear() {
+        const count = document.getElementById('barcodeList').children.length;
+        if (count === 0) { showNotification('btnClear', "Список уже пуст"); return; }
+        if(confirm('Очистить весь список?')) { document.getElementById('barcodeList').innerHTML = ''; updateCount(); }
+    }
+
+    function safePrint() {
+        const count = document.getElementById('barcodeList').children.length;
+        if (count === 0) { showNotification('btnPrint', "Список пуст! Добавьте коды."); return; }
+        window.print();
     }
 
     function updateCount() {
-        document.getElementById('count').innerText = document.getElementById('barcodeList').children.length;
+        const count = document.getElementById('barcodeList').children.length;
+        document.getElementById('count').innerText = count;
+        
+        const btnClear = document.getElementById('btnClear');
+        const btnPrint = document.getElementById('btnPrint');
+
+        if (count > 0) {
+            btnClear.className = "btn btn-danger";
+            btnPrint.className = "btn btn-primary w-100";
+        } else {
+            btnClear.className = "btn btn-secondary";
+            btnPrint.className = "btn btn-secondary w-100";
+        }
     }
     
-    // Enter работает как "Добавить"
     document.getElementById('snInput').addEventListener('keypress', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             addBarcodes();
         }
     });
+    
+    // Инициализация кнопок
+    updateCount();
 </script>
 
 {% endblock %}

@@ -10,13 +10,114 @@ from datetime import date, timedelta
 from django.contrib import messages
 from .models import Nomenclature, ToolInstance, Warehouse, MovementLog, ConsumableBalance, ToolKit, Car, News
 from .forms import NomenclatureForm, EmployeeForm, ToolInstanceForm, ToolKitForm, WarehouseForm, CarForm, NewsForm
+from django.db.models import Q, Sum 
 
-# --- 1. ДАШБОРД И СПИСОК ТОВАРОВ ---
+# --- 1. ДАШБОРД (ГЛАВНАЯ) ---
 @login_required
 def index(request):
-    """Главная страница: Дашборд"""
+    """Главная страница: Дашборд со статистикой, новостями и АЛЕРТАМИ"""
     today = date.today()
     yesterday = today - timedelta(days=1)
+    warning_date = today + timedelta(days=30)
+
+    # Статистика (без изменений)
+    ops_today = MovementLog.objects.filter(date__date=today).count()
+    ops_yesterday = MovementLog.objects.filter(date__date=yesterday).count()
+    rec_today = MovementLog.objects.filter(date__date=today, action_type='RECEIPT').exclude(serial_number='').count()
+    rec_yesterday = MovementLog.objects.filter(date__date=yesterday, action_type='RECEIPT').exclude(serial_number='').count()
+    users_today = User.objects.filter(actions__date__date=today).distinct()
+    users_yesterday = User.objects.filter(actions__date__date=yesterday).distinct()
+
+    wh_count = ToolInstance.objects.filter(current_warehouse__isnull=False).values('current_warehouse').distinct().count()
+    emp_count = ToolInstance.objects.filter(current_holder__isnull=False).values('current_holder').distinct().count()
+    kit_count = ToolKit.objects.filter(status='ISSUED').count()
+    car_count = Car.objects.filter(status='ON_ROUTE').count()
+    
+    # --- ПОИСК ПРОБЛЕМ (ТОЛЬКО ДЛЯ АДМИНОВ) ---
+    alerts = []
+    if request.user.is_staff:
+        
+        # 1. АВТОМОБИЛИ (ГРУППИРОВКА ПРОБЛЕМ)
+        cars = Car.objects.all()
+        for car in cars:
+            car_issues = [] # Список проблем конкретной машины
+            has_critical = False # Есть ли критичные проблемы (просрочка)
+
+            # Проверка Страховки
+            if car.insurance_expiry and car.insurance_expiry <= warning_date:
+                days_left = (car.insurance_expiry - today).days
+                if days_left < 0:
+                    car_issues.append(f"Страховка: ИСТЕКЛА ({abs(days_left)} дн. назад)")
+                    has_critical = True
+                else:
+                    car_issues.append(f"Страховка: истекает через {days_left} дн.")
+
+            # Проверка ТО (Масло)
+            if car.service_status != 'ok':
+                km = car.km_to_service
+                if km < 0:
+                    car_issues.append(f"ТО (Масло): Просрочено на {abs(km)} км")
+                    has_critical = True
+                else:
+                    car_issues.append(f"ТО (Масло): Осталось {km} км")
+
+            # Проверка Техосмотра (Грузовые)
+            if car.is_truck and car.ti_status != 'ok':
+                if car.ti_status == 'danger':
+                    car_issues.append("Техосмотр: ПРОСРОЧЕН!")
+                    has_critical = True
+                else:
+                    car_issues.append("Техосмотр: Скоро подходит срок")
+
+            # Если у машины есть проблемы - добавляем ОДИН общий алерт
+            if car_issues:
+                alerts.append({
+                    'type': 'danger' if has_critical else 'warning',
+                    'icon': 'fa-car', # Общая иконка
+                    'text': f"{car.name} ({car.license_plate})", # Заголовок
+                    'details_list': car_issues, # Список проблем
+                    'link': f"/cars/?car_id={car.id}" # Ссылка на карточку
+                })
+
+        # 2. РАСХОДНИКИ (ГРУППИРОВКА ПО СКЛАДАМ)
+        stock_problems = {}
+        balances = ConsumableBalance.objects.filter(nomenclature__minimum_stock__gt=0, warehouse__isnull=False).select_related('nomenclature', 'warehouse')
+
+        for bal in balances:
+            if bal.quantity <= bal.nomenclature.minimum_stock:
+                wh_name = bal.warehouse.name
+                if wh_name not in stock_problems:
+                    stock_problems[wh_name] = []
+                stock_problems[wh_name].append(f"{bal.nomenclature.name} {bal.nomenclature.article} (Осталось {bal.quantity})")
+        
+        for wh_name, items_list in stock_problems.items():
+            alerts.append({
+                'type': 'warning',
+                'icon': 'fa-boxes-packing',
+                'text': f"На складе «{wh_name}» заканчиваются:",
+                'details_list': items_list,
+                'link': None # Ссылка не нужна
+            })
+
+    # Новости
+    latest_news = News.objects.all().order_by('-date')[:5]
+
+    context = {
+        'ops_today': ops_today, 'ops_yesterday': ops_yesterday,
+        'rec_today': rec_today, 'rec_yesterday': rec_yesterday,
+        'users_today': users_today, 'users_yesterday': users_yesterday,
+        'wh_count': wh_count, 'emp_count': emp_count,
+        'kit_count': kit_count, 'car_count': car_count,
+        'latest_news': latest_news,
+        'news_form': NewsForm(),
+        'alerts': alerts,
+    }
+    return render(request, 'inventory/index.html', context)
+
+    """Главная страница: Дашборд со статистикой, новостями и АЛЕРТАМИ"""
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    warning_date = today + timedelta(days=30)
 
     # Статистика
     ops_today = MovementLog.objects.filter(date__date=today).count()
@@ -31,7 +132,47 @@ def index(request):
     kit_count = ToolKit.objects.filter(status='ISSUED').count()
     car_count = Car.objects.filter(status='ON_ROUTE').count()
     
-    # НОВОСТИ (последние 5)
+    # АЛЕРТЫ (Только для админов)
+    alerts = []
+    if request.user.is_staff:
+        # 1. АВТОМОБИЛИ
+        cars = Car.objects.all()
+        for car in cars:
+            if car.insurance_expiry and car.insurance_expiry <= warning_date:
+                days_left = (car.insurance_expiry - today).days
+                msg = "Истекла!" if days_left < 0 else f"Осталось {days_left} дн."
+                alerts.append({'type': 'danger' if days_left <= 0 else 'warning', 'icon': 'fa-file-contract', 'text': f"Страховка: {car.name} ({car.license_plate}) - {msg}", 'link': f"/cars/?car_id={car.id}"})
+            
+            if car.service_status != 'ok':
+                km = car.km_to_service
+                msg = f"Просрочено на {abs(km)} км" if km < 0 else f"Осталось {km} км"
+                # ИСПРАВЛЕНО: Убрали "(Масло)" из текста
+                alerts.append({'type': 'danger' if km < 0 else 'warning', 'icon': 'fa-wrench', 'text': f"ТО: {car.name} ({car.license_plate}) - {msg}", 'link': f"/cars/?car_id={car.id}"})
+            
+            if car.is_truck and car.ti_status != 'ok':
+                alerts.append({'type': 'danger' if car.ti_status == 'danger' else 'warning', 'icon': 'fa-clipboard-list', 'text': f"Техосмотр: {car.name} ({car.license_plate}) - Пора проходить!", 'link': f"/cars/?car_id={car.id}"})
+
+        # 2. РАСХОДНИКИ (ГРУППИРОВКА ПО СКЛАДАМ)
+        stock_problems = {}
+        balances = ConsumableBalance.objects.filter(nomenclature__minimum_stock__gt=0, warehouse__isnull=False).select_related('nomenclature', 'warehouse')
+
+        for bal in balances:
+            if bal.quantity <= bal.nomenclature.minimum_stock:
+                wh_name = bal.warehouse.name
+                if wh_name not in stock_problems:
+                    stock_problems[wh_name] = []
+                stock_problems[wh_name].append(f"{bal.nomenclature.name} {bal.nomenclature.article} (Осталось {bal.quantity})")
+        
+        for wh_name, items_list in stock_problems.items():
+            alerts.append({
+                'type': 'warning',
+                'icon': 'fa-boxes-packing',
+                'text': f"На складе «{wh_name}» заканчиваются:",
+                'details_list': items_list, # ИСПРАВЛЕНО: Имя ключа 'items' заменено на 'details_list'
+                'link': None
+            })
+
+    # Новости
     latest_news = News.objects.all().order_by('-date')[:5]
 
     context = {
@@ -40,11 +181,13 @@ def index(request):
         'users_today': users_today, 'users_yesterday': users_yesterday,
         'wh_count': wh_count, 'emp_count': emp_count,
         'kit_count': kit_count, 'car_count': car_count,
-        'latest_news': latest_news, # Передаем новости
-        'news_form': NewsForm() # Форма для создания
+        'latest_news': latest_news,
+        'news_form': NewsForm(),
+        'alerts': alerts,
     }
     return render(request, 'inventory/index.html', context)
 
+# --- 2. НОВОСТИ (ДОБАВЛЕНЫ) ---
 @staff_member_required
 def news_add(request):
     if request.method == 'POST':
@@ -53,6 +196,7 @@ def news_add(request):
             news = form.save(commit=False)
             news.author = request.user
             news.save()
+            messages.success(request, "Новость опубликована!")
     return redirect('index')
 
 @staff_member_required
@@ -60,7 +204,31 @@ def news_delete(request, pk):
     news = get_object_or_404(News, pk=pk)
     if request.method == 'POST':
         news.delete()
+        messages.success(request, "Новость удалена.")
     return redirect('index')
+
+@staff_member_required
+def news_delete(request, pk):
+    news = get_object_or_404(News, pk=pk)
+    if request.method == 'POST':
+        news.delete()
+        messages.success(request, "Новость удалена.")
+    return redirect('index')
+    # Новости
+    latest_news = News.objects.all().order_by('-date')[:5]
+
+    context = {
+        'ops_today': ops_today, 'ops_yesterday': ops_yesterday,
+        'rec_today': rec_today, 'rec_yesterday': rec_yesterday,
+        'users_today': users_today, 'users_yesterday': users_yesterday,
+        'wh_count': wh_count, 'emp_count': emp_count,
+        'kit_count': kit_count, 'car_count': car_count,
+        'latest_news': latest_news,
+        'news_form': NewsForm(),
+        'alerts': alerts,
+    }
+    return render(request, 'inventory/index.html', context)
+
 
 # --- 2. СПИСОК ТОВАРОВ (С ПАГИНАЦИЕЙ) ---
 @login_required
@@ -104,8 +272,13 @@ def tool_list(request):
         'employees': employees, 
         'warehouses': warehouses
     }
-    return render(request, 'inventory/tool_list.html', context)
+    
+    # Если запрос пришел через AJAX (JavaScript) - отдаем только кусок с таблицами
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/tool_list_content.html', context)
 
+    # Иначе отдаем полную страницу
+    return render(request, 'inventory/tool_list.html', context)
 
 # --- 2. АВТОМОБИЛИ ---
 @login_required
@@ -113,6 +286,7 @@ def car_list(request):
     cars = Car.objects.all()
     selected_car = None
     edit_form = None
+    
     history_trip_page = None
     history_maint_page = None
     
@@ -123,7 +297,7 @@ def car_list(request):
         selected_car = get_object_or_404(Car, pk=request.GET.get('car_id'))
         edit_form = CarForm(instance=selected_car)
         
-        # История поездок
+        # 1. История ПОЕЗДОК
         logs_trips = MovementLog.objects.filter(
             Q(source_car=selected_car) | Q(target_car=selected_car),
             action_type__in=['CAR_ISSUE', 'CAR_RETURN']
@@ -131,7 +305,7 @@ def car_list(request):
         paginator_trips = Paginator(logs_trips, 10)
         history_trip_page = paginator_trips.get_page(request.GET.get('page_trips'))
 
-        # История обслуживания
+        # 2. История ОБСЛУЖИВАНИЯ (ТО)
         logs_maint = MovementLog.objects.filter(
             Q(source_car=selected_car) | Q(target_car=selected_car),
             action_type__in=['CAR_TO_MAINT', 'CAR_FROM_MAINT', 'CAR_TO_TI', 'CAR_FROM_TI']
@@ -139,7 +313,7 @@ def car_list(request):
         paginator_maint = Paginator(logs_maint, 10)
         history_maint_page = paginator_maint.get_page(request.GET.get('page_maint'))
 
-    return render(request, 'inventory/cars.html', {
+    context = {
         'cars': cars,
         'selected_car': selected_car,
         'employees': User.objects.filter(is_active=True),
@@ -149,7 +323,13 @@ def car_list(request):
         'history_maint_page': history_maint_page,
         'today': today,
         'warning_date': warning_date
-    })
+    }
+
+    # AJAX: Возвращаем только правую часть (карточку и таблицы)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/cars_content.html', context)
+
+    return render(request, 'inventory/cars.html', context)
 
 @staff_member_required
 def car_create(request):
@@ -304,7 +484,13 @@ def history_list(request):
     page_number = request.GET.get('page')
     logs_page = paginator.get_page(page_number)
 
-    return render(request, 'inventory/history.html', {'logs': logs_page, 'employees': employees})
+    context = {'logs': logs_page, 'employees': employees}
+    
+    # AJAX-проверка
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/history_content.html', context)
+
+    return render(request, 'inventory/history.html', context)
 
 # --- 4. ОСТАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ) ---
 @staff_member_required
@@ -455,19 +641,20 @@ def tool_add(request):
                     return render(request, 'inventory/tool_add.html', {'form': form, 'nomenclature_types_json': json.dumps(nom_types)})
                 
                 tool = form.save(commit=False)
+                # АВТОМАТИЧЕСКИЕ ПОЛЯ:
+                tool.purchase_date = date.today() # Дата покупки = Сегодня
+                tool.status = 'IN_STOCK'          # Статус = На складе
                 tool.save()
-                MovementLog.objects.create(initiator=request.user, action_type='RECEIPT', nomenclature=nomenclature, tool_instance=tool, target_warehouse=warehouse, comment="Приход")
                 
-                # СООБЩЕНИЕ ОБ УСПЕХЕ (ИНСТРУМЕНТ)
-                messages.success(request, f"✅ Инструмент «{nomenclature.name}» ({inv_id}) успешно принят!")
+                MovementLog.objects.create(initiator=request.user, action_type='RECEIPT', nomenclature=nomenclature, tool_instance=tool, target_warehouse=warehouse, comment="Приход")
+                messages.success(request, f"✅ Инструмент «{nomenclature.name}» успешно принят!")
             
             else:
+                # Для расходников состояние не важно, оно просто суммируется
                 balance, _ = ConsumableBalance.objects.get_or_create(nomenclature=nomenclature, warehouse=warehouse, defaults={'quantity': 0})
                 balance.quantity += qty
                 balance.save()
                 MovementLog.objects.create(initiator=request.user, action_type='RECEIPT', nomenclature=nomenclature, target_warehouse=warehouse, quantity=qty, comment=f"Приход ({qty} шт)")
-                
-                # СООБЩЕНИЕ ОБ УСПЕХЕ (РАСХОДНИК)
                 messages.success(request, f"✅ Расходник «{nomenclature.name}» пополнен на {qty} шт.")
             
             return redirect('tool_add') 
@@ -588,7 +775,7 @@ def kit_list(request):
             available_tools = []
             available_consumables = []
 
-    return render(request, 'inventory/kits.html', {
+    context = {
         'kits': kits,
         'selected_kit': selected_kit,
         'available_tools': available_tools,
@@ -596,7 +783,13 @@ def kit_list(request):
         'employees': User.objects.filter(is_active=True),
         'form': ToolKitForm(),
         'edit_form': edit_form
-    })
+    }
+    
+    # AJAX: Возвращаем только контент
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/kits_content.html', context)
+
+    return render(request, 'inventory/kits.html', context)
 
 @staff_member_required
 def kit_create(request):
@@ -809,11 +1002,18 @@ def kit_return(request, kit_id):
 
 @staff_member_required
 def nomenclature_list(request):
-    items = Nomenclature.objects.all()
+    items = Nomenclature.objects.all().order_by('name') # Сортировка по алфавиту
+    
     if request.method == 'POST':
         form = NomenclatureForm(request.POST)
-        if form.is_valid(): form.save(); return redirect('nomenclature_list')
-    else: form = NomenclatureForm()
+        if form.is_valid():
+            form.save()
+            # Добавляем сообщение об успехе
+            messages.success(request, "✅ Номенклатура успешно добавлена!")
+            return redirect('nomenclature_list')
+    else:
+        form = NomenclatureForm()
+        
     return render(request, 'inventory/nomenclature_list.html', {'items': items, 'form': form})
 
 @staff_member_required

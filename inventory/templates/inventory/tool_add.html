@@ -12,13 +12,11 @@
                     {% csrf_token %}
                     
                     {% if form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            {{ form.non_field_errors }}
-                        </div>
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
                     {% endif %}
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Что принимаем (Номенклатура)</label>
+                        <label class="form-label fw-bold">Что принимаем</label>
                         {{ form.nomenclature }}
                         <div class="form-text text-end">
                             <a href="{% url 'nomenclature_list' %}" target="_blank" class="text-decoration-none">
@@ -27,15 +25,26 @@
                         </div>
                     </div>
 
-                    <div class="mb-3" id="block-inv">
-                        <label class="form-label fw-bold">Инвентарный номер / S/N</label>
-                        {{ form.inventory_id }}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">На какой склад</label>
+                        {{ form.current_warehouse }}
+                    </div>
+
+                    <div id="block-tool">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Инвентарный номер / S/N</label>
+                            {{ form.inventory_id }}
+                            {% if form.inventory_id.errors %}
+                                <div class="alert alert-danger mt-2 py-2 small">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> {{ form.inventory_id.errors|striptags }}
+                                </div>
+                            {% endif %}
+                        </div>
                         
-                        {% if form.inventory_id.errors %}
-                            <div class="alert alert-danger mt-2 py-2 small">
-                                <i class="fa-solid fa-triangle-exclamation"></i> {{ form.inventory_id.errors|striptags }}
-                            </div>
-                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Состояние</label>
+                            {{ form.condition }}
+                        </div>
                     </div>
 
                     <div class="mb-3" id="block-qty" style="display:none;">
@@ -43,27 +52,6 @@
                         {{ form.quantity }}
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">На какой склад принять</label>
-                        {{ form.current_warehouse }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Дата покупки</label>
-                        {{ form.purchase_date }}
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Статус</label>
-                            {{ form.status }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Состояние</label>
-                            {{ form.condition }}
-                        </div>
-                    </div>
-
                     <div class="d-flex justify-content-between mt-4">
                         <a href="{% url 'tool_list' %}" class="btn btn-secondary">Отмена</a>
                         <button type="submit" class="btn btn-success fw-bold px-4">Принять на склад</button>
@@ -77,26 +65,28 @@
 <script>
     const nomTypes = {{ nomenclature_types_json|safe }};
     const select = document.getElementById('id_nomenclature');
-    const blockInv = document.getElementById('block-inv');
-    const blockQty = document.getElementById('block-qty');
+    
+    const blockTool = document.getElementById('block-tool'); // Блок для инструмента (S/N + Состояние)
+    const blockQty = document.getElementById('block-qty');   // Блок для расходника (Кол-во)
 
     function toggleFields() {
         const val = select.value;
+        
         // Если ничего не выбрано или это ИНСТРУМЕНТ (TOOL)
         if (!val || nomTypes[val] === 'TOOL') {
-            blockInv.style.display = 'block';
-            blockQty.style.display = 'none';
+            blockTool.style.display = 'block'; // Показываем S/N и Состояние
+            blockQty.style.display = 'none';   // Скрываем кол-во
         } 
         // Если это РАСХОДНИК (CONSUMABLE)
         else {
-            blockInv.style.display = 'none';
-            blockQty.style.display = 'block';
+            blockTool.style.display = 'none';  // Скрываем S/N и Состояние
+            blockQty.style.display = 'block';  // Показываем кол-во
         }
     }
 
     if (select) {
         select.addEventListener('change', toggleFields);
-        toggleFields(); // Запуск при загрузке
+        toggleFields();
     }
 </script>
 {% endblock %}
