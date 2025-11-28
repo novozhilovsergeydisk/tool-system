@@ -234,6 +234,52 @@ def news_delete(request, pk):
 @login_required
 def tool_list(request):
     """Таблица всех инструментов и расходников"""
+    
+    # 1. Базовые запросы
+    # Инструменты: скрываем те, что в комплектах или машинах
+    tools = ToolInstance.objects.filter(kit__isnull=True, car__isnull=True).order_by('id')
+    
+    # Расходники: ТЕПЕРЬ ТОЖЕ скрываем те, что в комплектах (kit__isnull=True)
+    consumables = ConsumableBalance.objects.filter(kit__isnull=True).order_by('nomenclature__name')
+    
+    employees = User.objects.filter(is_active=True).order_by('username')
+    warehouses = Warehouse.objects.all().order_by('name')
+
+    # 2. Фильтрация
+    search = request.GET.get('search', '')
+    wh_id = request.GET.get('warehouse', '')
+    emp_id = request.GET.get('employee', '')
+
+    if search:
+        tools = tools.filter(Q(nomenclature__name__icontains=search) | Q(inventory_id__icontains=search))
+        consumables = consumables.filter(nomenclature__name__icontains=search)
+    if wh_id:
+        tools = tools.filter(current_warehouse_id=wh_id)
+        consumables = consumables.filter(warehouse_id=wh_id)
+    if emp_id:
+        tools = tools.filter(current_holder_id=emp_id)
+        consumables = consumables.filter(holder_id=emp_id)
+
+    # 3. Пагинация (10 на страницу)
+    paginator_tools = Paginator(tools, 10)
+    tools_page = paginator_tools.get_page(request.GET.get('page_tools'))
+
+    paginator_cons = Paginator(consumables, 10)
+    consumables_page = paginator_cons.get_page(request.GET.get('page_cons'))
+
+    context = {
+        'tools': tools_page, 
+        'consumables': consumables_page, 
+        'employees': employees, 
+        'warehouses': warehouses
+    }
+    
+    # AJAX обновление
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/tool_list_content.html', context)
+
+    return render(request, 'inventory/tool_list.html', context)
+    """Таблица всех инструментов и расходников"""
     # 1. Базовые запросы
     tools = ToolInstance.objects.filter(kit__isnull=True, car__isnull=True).order_by('id')
     consumables = ConsumableBalance.objects.all().order_by('nomenclature__name')
@@ -1002,19 +1048,32 @@ def kit_return(request, kit_id):
 
 @staff_member_required
 def nomenclature_list(request):
-    items = Nomenclature.objects.all().order_by('name') # Сортировка по алфавиту
+    # 1. Получаем все записи
+    items_qs = Nomenclature.objects.all().order_by('name')
     
+    # 2. Обработка формы добавления
     if request.method == 'POST':
         form = NomenclatureForm(request.POST)
         if form.is_valid():
             form.save()
-            # Добавляем сообщение об успехе
             messages.success(request, "✅ Номенклатура успешно добавлена!")
             return redirect('nomenclature_list')
     else:
         form = NomenclatureForm()
+
+    # 3. Пагинация (10 штук на страницу)
+    paginator = Paginator(items_qs, 10)
+    page_number = request.GET.get('page')
+    items_page = paginator.get_page(page_number)
+
+    context = {'items': items_page, 'form': form}
+
+    # 4. Если это AJAX запрос - отдаем только таблицу
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'inventory/nomenclature_list_content.html', context)
         
-    return render(request, 'inventory/nomenclature_list.html', {'items': items, 'form': form})
+    # 5. Иначе отдаем полную страницу
+    return render(request, 'inventory/nomenclature_list.html', context)
 
 @staff_member_required
 def nomenclature_edit(request, pk):

@@ -10,3 +10,4 @@ __pycache__/
 db.sqlite3
 code_inspection_recommendations.txt
 deploy.log
+.DS_Store

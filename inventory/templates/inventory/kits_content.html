@@ -95,17 +95,18 @@
                 <div class="col-md-6">
                     <div class="p-3 bg-body border rounded h-100">
                         <label class="small fw-bold mb-2"><i class="fa-solid fa-hammer"></i> Добавить инструмент:</label>
+                        <input type="text" class="form-control form-control-sm mb-2" placeholder="🔍 Начните вводить..." onkeyup="filterOptions(this, 'toolSelect')">
+                        
                         <form action="{% url 'kit_add_tool' selected_kit.id %}" method="post" class="d-flex gap-1">
                             {% csrf_token %}
-                            <select name="tool_id" class="form-select form-select-sm" required>
-                                <option value="" selected disabled>Выберите...</option>
+                            <select name="tool_id" id="toolSelect" class="form-select form-select-sm" size="5" required>
                                 {% for t in available_tools %}
                                     <option value="{{ t.id }}">
                                         {{ t.nomenclature.name }} {{ t.nomenclature.article }} №{{ t.inventory_id }}
                                     </option>
                                 {% endfor %}
                             </select>
-                            <button class="btn btn-sm btn-primary"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn btn-sm btn-primary align-self-start"><i class="fa-solid fa-plus"></i></button>
                         </form>
                     </div>
                 </div>
@@ -113,18 +114,23 @@
                 <div class="col-md-6">
                     <div class="p-3 bg-body border rounded h-100">
                         <label class="small fw-bold mb-2"><i class="fa-solid fa-box"></i> Добавить расходник:</label>
-                        <form action="{% url 'kit_add_consumable' selected_kit.id %}" method="post" class="d-flex gap-1">
+                        <input type="text" class="form-control form-control-sm mb-2" placeholder="🔍 Начните вводить..." onkeyup="filterOptions(this, 'consSelect')">
+                        
+                        <form action="{% url 'kit_add_consumable' selected_kit.id %}" method="post">
                             {% csrf_token %}
-                            <select name="balance_id" class="form-select form-select-sm" required>
-                                <option value="" selected disabled>Выберите...</option>
-                                {% for c in available_consumables %}
-                                    <option value="{{ c.id }}">
-                                        {{ c.nomenclature.name }} {{ c.nomenclature.article }} [{{ c.quantity }} шт]
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            <input type="number" name="quantity" class="form-control form-control-sm" placeholder="Кол-во" style="width: 70px;" min="1" required>
-                            <button class="btn btn-sm btn-primary"><i class="fa-solid fa-plus"></i></button>
+                            <div class="d-flex gap-1 mb-1">
+                                <select name="balance_id" id="consSelect" class="form-select form-select-sm" size="3" required>
+                                    {% for c in available_consumables %}
+                                        <option value="{{ c.id }}">
+                                            {{ c.nomenclature.name }} {{ c.nomenclature.article }} [{{ c.quantity }} шт]
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="d-flex gap-1">
+                                <input type="number" name="quantity" class="form-control form-control-sm" placeholder="Кол-во" min="1" required>
+                                <button class="btn btn-sm btn-primary w-100"><i class="fa-solid fa-plus"></i> Добавить</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -135,15 +141,45 @@
     </div>
 
     {% if user.is_staff %}
-        {% if selected_kit %}
         <div class="modal fade" id="editKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_edit' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Редактирование</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Название</label>{{ edit_form.name }}</div><div class="mb-3"><label class="fw-bold">Склад приписки</label>{{ edit_form.warehouse }}</div><div class="mb-3"><label class="fw-bold">Описание</label>{{ edit_form.description }}</div></div><div class="modal-footer"><button class="btn btn-primary">Сохранить</button></div></form></div></div></div>
-        {% endif %}
-
-        <div class="modal fade" id="removeToolModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeToolForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать инструмент</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeToolName"></strong></p><p class="small">Вернется на склад: <b>{{ selected_kit.warehouse.name }}</b></p><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2" placeholder="Например: Замена"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
-        <div class="modal fade" id="removeConsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeConsForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать расходник</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeConsName"></strong></p><p class="small">В комплекте: <span id="removeConsMax"></span> шт.</p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="removeConsQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
-        <div class="modal fade" id="issueKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_issue' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Выдача комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <b>{{ selected_kit.name }}</b></p>{% if user.is_staff %}<div class="mb-3"><label>Кому:</label><select name="employee_id" class="form-select">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div>{% else %}<input type="hidden" name="employee_id" value="{{ user.id }}"><div class="alert alert-light border"><i class="fa-solid fa-user-check"></i> Получатель: <b>{{ user.get_full_name|default:user.username }}</b></div>{% endif %}<div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary">Подтвердить</button></div></form></div></div></div>
-        <div class="modal fade" id="returnKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_return' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возвращаем: <b>{{ selected_kit.name }}</b></p><p>Склад: <b>{{ selected_kit.warehouse.name|default:"Не указан" }}</b></p><div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
     {% endif %}
+
+    <div class="modal fade" id="removeToolModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeToolForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать инструмент</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeToolName"></strong></p><p class="small">Вернется на склад: <b>{{ selected_kit.warehouse.name }}</b></p><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2" placeholder="Например: Замена"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
+    <div class="modal fade" id="removeConsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" id="removeConsForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Убрать расходник</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Убираем: <strong id="removeConsName"></strong></p><p class="small">В комплекте: <span id="removeConsMax"></span> шт.</p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="removeConsQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Убрать</button></div></form></div></div></div>
+    
+    <div class="modal fade" id="issueKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_issue' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Выдача комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <b>{{ selected_kit.name }}</b></p>{% if user.is_staff %}<div class="mb-3"><label>Кому:</label><select name="employee_id" class="form-select">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div>{% else %}<input type="hidden" name="employee_id" value="{{ user.id }}"><div class="alert alert-light border"><i class="fa-solid fa-user-check"></i> Получатель: <b>{{ user.get_full_name|default:user.username }}</b></div>{% endif %}<div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary">Подтвердить</button></div></form></div></div></div>
+    <div class="modal fade" id="returnKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_return' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат комплекта</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возвращаем: <b>{{ selected_kit.name }}</b></p><p>Склад: <b>{{ selected_kit.warehouse.name|default:"Не указан" }}</b></p><div class="mb-3"><label>Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
+
+    <script>
+        function setRemoveToolModal(kitId, toolId, name) {
+            document.getElementById('removeToolName').innerText = name;
+            document.getElementById('removeToolForm').action = "/kits/" + kitId + "/remove_tool/" + toolId + "/";
+        }
+        function setRemoveConsModal(kitId, balId, name, maxQty) {
+            document.getElementById('removeConsName').innerText = name;
+            document.getElementById('removeConsMax').innerText = maxQty;
+            var i = document.getElementById('removeConsQty'); i.max = maxQty; i.value = 1;
+            document.getElementById('removeConsForm').action = "/kits/" + kitId + "/remove_consumable/" + balId + "/";
+        }
+
+        // ФУНКЦИЯ ПОИСКА В СПИСКЕ
+        function filterOptions(input, selectId) {
+            const filter = input.value.toLowerCase();
+            const select = document.getElementById(selectId);
+            const options = select.getElementsByTagName('option');
+
+            for (let i = 0; i < options.length; i++) {
+                const txtValue = options[i].textContent || options[i].innerText;
+                if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                    options[i].style.display = "";
+                    options[i].hidden = false;
+                } else {
+                    options[i].style.display = "none";
+                    options[i].hidden = true;
+                }
+            }
+        }
+    </script>
 
 {% else %}
     <div class="text-center text-body-secondary mt-5"><i class="fa-solid fa-toolbox fa-3x mb-3"></i><h4>Выберите комплект из списка слева</h4></div>
