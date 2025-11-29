@@ -72,21 +72,16 @@
     function toggleFields() {
         const val = select.value;
         
-        // Если ничего не выбрано или это ИНСТРУМЕНТ (TOOL)
-        if (!val || nomTypes[val] === 'TOOL') {
-            blockTool.style.display = 'block'; // Показываем S/N и Состояние
-            blockQty.style.display = 'none';   // Скрываем кол-во
+        // Если Инструмент ИЛИ Экипировка -> показываем S/N
+        if (!val || nomTypes[val] === 'TOOL' || nomTypes[val] === 'EQUIPMENT') {
+            blockTool.style.display = 'block';
+            blockQty.style.display = 'none';
         } 
-        // Если это РАСХОДНИК (CONSUMABLE)
+        // Если Расходник
         else {
-            blockTool.style.display = 'none';  // Скрываем S/N и Состояние
-            blockQty.style.display = 'block';  // Показываем кол-во
+            blockTool.style.display = 'none';
+            blockQty.style.display = 'block';
         }
-    }
-
-    if (select) {
-        select.addEventListener('change', toggleFields);
-        toggleFields();
     }
 </script>
 {% endblock %}

@@ -11,14 +11,27 @@ class Warehouse(models.Model):
     class Meta: verbose_name = "Склад"; verbose_name_plural = "Склады"
 
 class Nomenclature(models.Model):
-    TYPE_CHOICES = (('TOOL', 'Инструмент'), ('CONSUMABLE', 'Расходник'))
+    TYPE_CHOICES = (
+        ('TOOL', 'Инструмент'), 
+        ('EQUIPMENT', 'Экипировка'), 
+        ('CONSUMABLE', 'Расходник')
+        )
     name = models.CharField("Название", max_length=200)
-    article = models.CharField("Артикул", max_length=50, unique=True)
+    
+    article = models.CharField("Артикул", max_length=50) 
+    
     item_type = models.CharField("Тип", max_length=20, choices=TYPE_CHOICES)
     description = models.TextField("Описание", blank=True)
     minimum_stock = models.PositiveIntegerField("Минимальный остаток", default=0, help_text="Если остаток на складах упадет ниже этого числа, появится уведомление. 0 = не отслеживать.")
+
     def __str__(self): return f"{self.name} ({self.article})"
-    class Meta: verbose_name = "Номенклатура"; verbose_name_plural = "Номенклатура"
+
+    class Meta: 
+        verbose_name = "Номенклатура"
+        verbose_name_plural = "Номенклатура"
+        # ВАЖНО: Теперь уникальна только ПАРА (Название + Артикул)
+        # То есть нельзя создать двух "Молотков 123", но можно "Молоток 123" и "Дрель 123"
+        unique_together = [['name', 'article']]
 
 # --- 2. КОМПЛЕКТЫ И АВТОМОБИЛИ ---
 
@@ -26,9 +39,15 @@ class ToolKit(models.Model):
     name = models.CharField("Название комплекта", max_length=200)
     description = models.TextField("Описание", blank=True)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Место хранения")
+    
     STATUS_CHOICES = (('IN_STOCK', 'На складе'), ('ISSUED', 'Выдан'))
     status = models.CharField("Статус", max_length=20, choices=STATUS_CHOICES, default='IN_STOCK')
-    current_holder = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Владелец")
+    
+    current_holder = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Ответственный")
+    
+    # НОВОЕ ПОЛЕ: Список тех, кто работает с комплектом (и может его вернуть)
+    co_workers = models.ManyToManyField(User, related_name='working_kits', blank=True, verbose_name="Со-работники")
+
     def __str__(self): return self.name
     class Meta: verbose_name = "Комплект"; verbose_name_plural = "Комплекты"
 
@@ -177,6 +196,8 @@ class MovementLog(models.Model):
     trip_mileage = models.PositiveIntegerField("Пробег за поездку", null=True, blank=True)
     fuel_liters = models.PositiveIntegerField("Заправлено (л)", null=True, blank=True)
     maintenance_work = models.TextField("Работы", blank=True)
+    
+    composition = models.TextField("Состав комплекта (Snapshot)", blank=True)
     
     comment = models.TextField("Комментарий", blank=True)
 

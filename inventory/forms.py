@@ -1,17 +1,25 @@
 from django import forms
 from django.contrib.auth.models import User
 from .models import Nomenclature, ToolInstance, ToolKit, Warehouse, Car, News
+from django.db.models import Q
 
-# 1. Форма для создания ВИДА товара (Справочник)
+# 1. Форма для создания ВИДА товара (С УМНОЙ ПРОВЕРКОЙ)
 class NomenclatureForm(forms.ModelForm):
+    # Скрытое поле подтверждения
+    confirm_save = forms.BooleanField(
+        required=False, 
+        initial=False,
+        widget=forms.HiddenInput() # По умолчанию скрыто
+    )
+
     class Meta:
         model = Nomenclature
         fields = ['name', 'article', 'item_type', 'minimum_stock', 'description']
         labels = {
             'name': 'Название',
             'article': 'Артикул',
-            'item_type': 'Тип (Инструмент/Расходник)',
-            'minimum_stock': 'Минимальный остаток (для уведомлений)',
+            'item_type': 'Тип',
+            'minimum_stock': 'Мин. остаток',
             'description': 'Описание'
         }
         widgets = {
@@ -21,6 +29,43 @@ class NomenclatureForm(forms.ModelForm):
             'minimum_stock': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get('name')
+        article = cleaned_data.get('article')
+        confirm = cleaned_data.get('confirm_save')
+
+        if name and article:
+            # 1. ПОЛНОЕ СОВПАДЕНИЕ (Блокируем намертво)
+            # Исключаем self.instance, если это редактирование существующего
+            exact_match = Nomenclature.objects.filter(name__iexact=name, article__iexact=article)
+            if self.instance.pk:
+                exact_match = exact_match.exclude(pk=self.instance.pk)
+            
+            if exact_match.exists():
+                raise forms.ValidationError("⛔ ОШИБКА: Товар с таким Названием И Артикулом уже существует! Дубликаты запрещены.")
+
+            # 2. ЧАСТИЧНОЕ СОВПАДЕНИЕ (Предупреждаем)
+            # Если галочка подтверждения НЕ стоит - проверяем
+            if not confirm:
+                similar = Nomenclature.objects.filter(Q(name__iexact=name) | Q(article__iexact=article))
+                if self.instance.pk:
+                    similar = similar.exclude(pk=self.instance.pk)
+                
+                if similar.exists():
+                    # Нашли похожий товар
+                    obj = similar.first()
+                    msg = f"Внимание! В базе уже есть: «{obj.name}» [{obj.article}]. Вы уверены, что «{name}» [{article}] — это другой товар?"
+                    
+                    # Делаем поле подтверждения видимым чекбоксом
+                    self.fields['confirm_save'].widget = forms.CheckboxInput(attrs={'class': 'form-check-input'})
+                    self.fields['confirm_save'].label = "Да, я уверен, это разные товары. Сохранить."
+                    
+                    # Вызываем ошибку формы, чтобы остановить сохранение и показать сообщение
+                    raise forms.ValidationError(msg)
+
+        return cleaned_data
 
 # 2. Форма для ПРИХОДА (УПРОЩЕННАЯ)
 class ToolInstanceForm(forms.ModelForm):

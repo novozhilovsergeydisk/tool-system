@@ -49,6 +49,19 @@
                     <div class="mb-3"><label class="fw-bold">Описание</label>{{ form.description }}</div>
                 </div>
                 <div class="modal-footer">
+				{% if form.confirm_save.field.widget.input_type == 'checkbox' %}
+                        <div class="alert alert-warning mt-3 border-warning">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Подтверждение:
+                            <div class="form-check mt-2">
+                                {{ form.confirm_save }}
+                                <label class="form-check-label fw-bold" for="{{ form.confirm_save.id_for_label }}">
+                                    {{ form.confirm_save.label }}
+                                </label>
+                            </div>
+                        </div>
+                    {% else %}
+                        {{ form.confirm_save }}
+                    {% endif %}
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="submit" class="btn btn-success">Сохранить</button>
                 </div>
