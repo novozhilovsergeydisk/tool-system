@@ -20,7 +20,6 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -176,3 +175,40 @@ LOGIN_URL = '/login/'
 
 # Куда перенаправлять после выхода:
 LOGOUT_REDIRECT_URL = '/login/'
+
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    try:
+        os.makedirs(LOGS_DIR)
+    except OSError:
+        pass # Если прав нет, надеемся, что папка уже есть
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    # Формат записи: Время - Уровень - Где ошибка - Сообщение
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    # Куда писать: В файл
+    'handlers': {
+        'file': {
+            'level': 'ERROR', # Пишем только ОШИБКИ (Warning и Info не пишем)
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'django_errors.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
+        },
+    },
+    # Чьи ошибки ловить: Django
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
+}
