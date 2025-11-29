@@ -176,13 +176,6 @@ LOGIN_URL = '/login/'
 # Куда перенаправлять после выхода:
 LOGOUT_REDIRECT_URL = '/login/'
 
-LOGS_DIR = os.path.join(BASE_DIR, 'logs')
-if not os.path.exists(LOGS_DIR):
-    try:
-        os.makedirs(LOGS_DIR)
-    except OSError:
-        pass # Если прав нет, надеемся, что папка уже есть
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
