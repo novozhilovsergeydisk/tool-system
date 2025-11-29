@@ -150,11 +150,10 @@ class ConsumableBalance(models.Model):
     class Meta: 
         verbose_name = "Остаток расходника"
         verbose_name_plural = "Расходники (Баланс)"
-        # Добавляем уникальность для комплекта
+        # ИЗМЕНЕНО: Добавили 'kit' в списки уникальности
         unique_together = [
-            ['nomenclature', 'warehouse'], 
-            ['nomenclature', 'holder'],
-            ['nomenclature', 'kit'] # <--- НОВОЕ
+            ['nomenclature', 'warehouse', 'kit'], 
+            ['nomenclature', 'holder', 'kit']
         ]
 
 # --- 4. ЖУРНАЛ ---

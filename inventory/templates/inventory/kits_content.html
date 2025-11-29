@@ -207,7 +207,7 @@
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="cons_selected" value="{{ cons.id }}" id="c{{ cons.id }}" checked>
                     <label class="form-check-label small" for="c{{ cons.id }}">
-                        {{ cons.nomenclature.name }} ({{ cons.quantity }} шт)
+                        {{ cons.nomenclature.name }} {{ cons.nomenclature.article }} ({{ cons.quantity }} шт)
                     </label>
                 </div>
                 {% endfor %}
@@ -219,57 +219,46 @@
             </div>
         </div>
         <div class="modal-footer"><button class="btn btn-primary">Выдать выбранное</button></div>
-    </form></div></div></div>  
-    <div class="modal fade" id="returnKitModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="post" action="{% url 'kit_return' selected_kit.id %}">
-                    {% csrf_token %}
-                    <div class="modal-header bg-success text-white">
-                        <h5 class="modal-title">Возврат комплекта</h5>
-                    </div>
-                    <div class="modal-body">
-                        <p class="mb-2">Следующие инструменты вернутся на склад:</p>
-                        
-                        <div class="border rounded p-2 bg-body mb-3" style="max-height: 200px; overflow-y: auto;">
-                            <ul class="list-unstyled mb-0 small">
-                                {% for tool in selected_kit.tools.all %}
-                                    {% if tool.current_holder == selected_kit.current_holder %}
-                                        <li class="d-flex justify-content-between border-bottom py-1">
-                                            <span>
-                                                <strong>{{ tool.nomenclature.name }}</strong>
-                                                <span class="text-body-secondary">{{ tool.nomenclature.article }}</span>
-                                            </span>
-                                            <span class="font-monospace text-body-secondary">{{ tool.inventory_id }}</span>
-                                        </li>
-                                    {% endif %}
-                                {% empty %}
-                                    <li class="text-muted text-center">Инструменты не найдены (только кейс)</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
+    </form></div></div></div>
+    
+    <div class="modal fade" id="returnKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_return' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат комплекта</h5></div>
+        <div class="modal-body">
+            <div class="alert alert-warning small mb-2">
+                <i class="fa-solid fa-info-circle"></i> 
+                <b>Обратите внимание:</b><br>
+                Инструменты (рулетки, дрели) вернутся на склад.<br>
+                Расходники (гвозди, пена) останутся числиться за вами. Спишите их отдельно, если они потрачены.
+            </div>
 
-                        {% if selected_kit.co_workers.exists %}
-                            <div class="alert alert-info py-1 px-2 small mb-3">
-                                <i class="fa-solid fa-users"></i> <b>Бригада:</b>
-                                {% for cw in selected_kit.co_workers.all %}
-                                    {{ cw.get_full_name|default:cw.username }}{% if not forloop.last %}, {% endif %}
-                                {% endfor %}
-                            </div>
+            <p class="mb-2 fw-bold">Будет возвращено на склад:</p>
+            
+            <div class="border rounded p-2 bg-body mb-3" style="max-height: 200px; overflow-y: auto;">
+                <ul class="list-unstyled mb-0 small">
+                    {% for tool in selected_kit.tools.all %}
+                        {% if tool.current_holder == selected_kit.current_holder %}
+                            <li class="d-flex justify-content-between border-bottom py-1">
+                                <span>
+                                    <i class="fa-solid fa-hammer text-secondary"></i> 
+                                    <strong>{{ tool.nomenclature.name }}</strong>
+                                    <span class="text-body-secondary">{{ tool.nomenclature.article }}</span>
+                                </span>
+                                <span class="font-monospace text-body-secondary">{{ tool.inventory_id }}</span>
+                            </li>
                         {% endif %}
+                    {% empty %}
+                        <li class="text-muted text-center">Только пустой кейс</li>
+                    {% endfor %}
+                </ul>
+            </div>
 
-                        <div class="mb-3">
-                            <label>Комментарий:</label>
-                            <textarea name="comment" class="form-control" rows="2" placeholder="Например: Всё исправно"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-success w-100">Подтвердить возврат</button>
-                    </div>
-                </form>
+            <div class="mb-3">
+                <label>Комментарий:</label>
+                <textarea name="comment" class="form-control" rows="2" placeholder="Например: Всё исправно"></textarea>
             </div>
         </div>
-    </div>
+        <div class="modal-footer"><button class="btn btn-success">Подтвердить возврат</button></div>
+    </form></div></div></div>
+
     <script>
         function setRemoveToolModal(kitId, toolId, name) {
             document.getElementById('removeToolName').innerText = name;

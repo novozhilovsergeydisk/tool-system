@@ -330,12 +330,52 @@ def consumable_return(request, pk):
     if request.method == 'POST':
         wh = get_object_or_404(Warehouse, pk=request.POST.get('warehouse_id'))
         qty = int(request.POST.get('quantity', 0))
+        
         if qty > 0 and balance.quantity >= qty:
-            balance.quantity -= qty; balance.save()
-            target, _ = ConsumableBalance.objects.get_or_create(nomenclature=balance.nomenclature, warehouse=wh, defaults={'quantity': 0})
-            target.quantity += qty; target.save()
-            MovementLog.objects.create(initiator=request.user, action_type='RETURN', nomenclature=balance.nomenclature, quantity=qty, source_user=balance.holder, target_warehouse=wh, comment=f"Возврат {qty} шт.")
+            balance.quantity -= qty
+            balance.save()
+            
+            # ИСПРАВЛЕНО: Защита от дублей
+            # Ищем ВСЕ записи на этом складе с такой номенклатурой
+            target_bals = ConsumableBalance.objects.filter(
+                nomenclature=balance.nomenclature, 
+                warehouse=wh,
+                kit__isnull=True # Важно: ищем только "чистые" остатки, не привязанные к комплектам
+            )
+            
+            if target_bals.exists():
+                # Если нашли (одну или много) - берем первую и прибавляем
+                target = target_bals.first()
+                target.quantity += qty
+                target.save()
+                
+                # (Опционально: можно удалить остальные дубликаты, чтобы почистить базу)
+                if target_bals.count() > 1:
+                    for dup in target_bals[1:]:
+                        # Переносим остатки с дублей на основную запись и удаляем их
+                        target.quantity += dup.quantity
+                        target.save()
+                        dup.delete()
+            else:
+                # Если не нашли - создаем новую
+                ConsumableBalance.objects.create(
+                    nomenclature=balance.nomenclature, 
+                    warehouse=wh, 
+                    quantity=qty
+                )
+
+            MovementLog.objects.create(
+                initiator=request.user, 
+                action_type='RETURN', 
+                nomenclature=balance.nomenclature, 
+                quantity=qty, 
+                source_user=balance.holder, 
+                target_warehouse=wh, 
+                comment=f"Возврат {qty} шт."
+            )
+            
             if balance.quantity == 0: balance.delete()
+            
     return redirect('tool_list')
 
 @staff_member_required
@@ -601,59 +641,69 @@ def kit_delete(request, kit_id):
 
 @login_required
 def kit_issue(request, kit_id):
-    """ВЫДАЧА: С сохранением списка допущенных к возврату"""
+    """ВЫДАЧА: Расходники перемещаются к сотруднику, но остаются ПРИВЯЗАНЫ к комплекту"""
     kit = get_object_or_404(ToolKit, pk=kit_id)
     
     if request.method == 'POST':
         user = get_object_or_404(User, pk=request.POST.get('employee_id'))
         
-        # Списки
-        selected_tools_ids = request.POST.getlist('tools_selected')
-        selected_cons_ids = request.POST.getlist('cons_selected')
+        selected_tools_ids = set(request.POST.getlist('tools_selected'))
+        selected_cons_ids = set(request.POST.getlist('cons_selected'))
         partner_ids = request.POST.getlist('partner_ids')
         
-        issued_items_list = []
+        log_items = []
 
-        # 1. Инструменты
-        for t_id in selected_tools_ids:
-            tool = ToolInstance.objects.get(pk=t_id)
-            if tool.status == 'IN_STOCK':
+        # 1. ИНСТРУМЕНТЫ
+        for tool in kit.tools.all():
+            if str(tool.id) in selected_tools_ids:
+                # БЕРУТ: Передаем сотруднику
                 tool.current_holder = user
                 tool.current_warehouse = None
                 tool.status = 'ISSUED'
                 tool.save()
-                issued_items_list.append(f"🔧 {tool.nomenclature.name} (#{tool.inventory_id})")
+                log_items.append(f"🔧 {tool.nomenclature.name} {tool.nomenclature.article} (№{tool.inventory_id})")
+            else:
+                # НЕ БЕРУТ: Оставляем на складе, но в комплекте
+                tool.current_holder = None
+                tool.current_warehouse = kit.warehouse
+                tool.status = 'IN_STOCK'
+                tool.save()
 
-        # 2. Расходники
-        for c_id in selected_cons_ids:
-            kit_bal = ConsumableBalance.objects.get(pk=c_id)
-            qty_to_take = kit_bal.quantity 
-            if qty_to_take > 0:
-                user_bal, _ = ConsumableBalance.objects.get_or_create(nomenclature=kit_bal.nomenclature, holder=user, defaults={'quantity': 0})
-                user_bal.quantity += qty_to_take
-                user_bal.save()
-                kit_bal.delete()
-                issued_items_list.append(f"🔩 {kit_bal.nomenclature.name} ({qty_to_take} шт)")
+        # 2. РАСХОДНИКИ (НОВАЯ ЛОГИКА)
+        for cons in kit.consumables.all():
+            if str(cons.id) in selected_cons_ids:
+                # БЕРУТ:
+                # Мы НЕ удаляем запись и НЕ сливаем её с другими вещами юзера.
+                # Мы просто меняем локацию этой конкретной пачки гвоздей.
+                cons.holder = user
+                cons.warehouse = None
+                # Поле kit остается неизменным! Система помнит, что это "Гвозди от комплекта А"
+                cons.save()
+                
+                log_items.append(f"🔩 {cons.nomenclature.name} {cons.nomenclature.article} ({cons.quantity} шт)")
+            else:
+                # НЕ БЕРУТ:
+                # Возвращаем на склад (внутри комплекта)
+                cons.holder = None
+                cons.warehouse = kit.warehouse
+                cons.save()
 
-        # 3. Сам комплект
+        # 3. САМ КОМПЛЕКТ
         kit.current_holder = user
         kit.status = 'ISSUED'
         
-        # СОХРАНЯЕМ СО-РАБОТНИКОВ (Кто еще может вернуть)
-        kit.co_workers.clear() # Очищаем старых
+        # Напарники
+        kit.co_workers.clear()
         partners_names = []
         if partner_ids:
             partners = User.objects.filter(id__in=partner_ids)
-            kit.co_workers.set(partners) # Записываем новых
+            kit.co_workers.set(partners)
             partners_names = [p.get_full_name() or p.username for p in partners]
 
         kit.save()
         
-        if not issued_items_list:
-            issued_items_list.append("Только кейс (без содержимого)")
-            
-        if partners_names:
-            issued_items_list.append(f"\n👥 Работают с комплектом: {', '.join(partners_names)}")
+        if not log_items: log_items.append("Пустой кейс")
+        if partners_names: log_items.append(f"\n👥 Бригада: {', '.join(partners_names)}")
 
         MovementLog.objects.create(
             initiator=request.user, 
@@ -662,18 +712,18 @@ def kit_issue(request, kit_id):
             nomenclature_article="КОМПЛЕКТ", 
             source_warehouse=kit.warehouse, 
             target_user=user, 
-            composition="\n".join(issued_items_list),
+            composition="\n".join(log_items),
             comment=request.POST.get('comment', '')
         )
 
     return redirect(f'/kits/?kit_id={kit.id}')
 
+
 @login_required
 def kit_return(request, kit_id):
-    """ВОЗВРАТ КОМПЛЕКТА: С артикулами и бригадой"""
+    """ВОЗВРАТ КОМПЛЕКТА (С ОБЪЕДИНЕНИЕМ РАСХОДНИКОВ)"""
     kit = get_object_or_404(ToolKit, pk=kit_id)
     
-    # Проверка прав (Админ, Владелец или Участник бригады)
     is_authorized = (
         request.user.is_staff or 
         kit.current_holder == request.user or 
@@ -684,40 +734,58 @@ def kit_return(request, kit_id):
         wh = kit.warehouse if kit.warehouse else Warehouse.objects.first()
         holder_was = kit.current_holder
         
-        # 1. Сохраняем состав бригады ПЕРЕД очисткой
-        # (чтобы записать в историю, кто работал с этим комплектом)
         coworkers_list = [u.get_full_name() or u.username for u in kit.co_workers.all()]
-        
         returned_items_list = []
         
-        # 2. Возвращаем инструменты (только те, что числятся на ответственном)
+        # 1. ИНСТРУМЕНТЫ
         tools_to_return = ToolInstance.objects.filter(kit=kit, current_holder=holder_was)
-        
         for tool in tools_to_return:
             tool.current_holder = None
             tool.current_warehouse = wh
             tool.status = 'IN_STOCK'
             tool.save()
-            # ДОБАВЛЕН АРТИКУЛ
             returned_items_list.append(f"🔧 {tool.nomenclature.name} {tool.nomenclature.article} (№{tool.inventory_id})")
 
-        # 3. Сбрасываем комплект
+        # 2. РАСХОДНИКИ (СЛИЯНИЕ)
+        cons_to_return = ConsumableBalance.objects.filter(kit=kit, holder=holder_was)
+        
+        for cons in cons_to_return:
+            # Ищем, есть ли уже такие расходники в этом комплекте на складе
+            # (Например, если часть оставалась невыданной)
+            existing_kit_bal = ConsumableBalance.objects.filter(
+                kit=kit, 
+                warehouse=wh, 
+                nomenclature=cons.nomenclature
+            ).first()
+
+            if existing_kit_bal:
+                # Если есть - приплюсовываем и удаляем запись сотрудника
+                existing_kit_bal.quantity += cons.quantity
+                existing_kit_bal.save()
+                cons.delete()
+            else:
+                # Если нет - просто перемещаем запись сотрудника на склад
+                cons.holder = None
+                cons.warehouse = wh
+                cons.save()
+
+            returned_items_list.append(f"🔩 {cons.nomenclature.name} {cons.nomenclature.article} ({cons.quantity} шт)")
+
+        # 3. КОМПЛЕКТ
         kit.current_holder = None
-        kit.co_workers.clear() # Очищаем бригаду
+        kit.co_workers.clear()
         kit.status = 'IN_STOCK'
         kit.save()
         
         if not returned_items_list:
-            returned_items_list.append("Только кейс (инструменты не найдены)")
+            returned_items_list.append("Только кейс")
             
-        # 4. Добавляем бригаду в описание истории
         if coworkers_list:
-            returned_items_list.append(f"\n👥 Состав бригады: {', '.join(coworkers_list)}")
-            
-        # Если возвращал не ответственный, а напарник - помечаем это в комментарии
+            returned_items_list.append(f"\n👥 Бригада: {', '.join(coworkers_list)}")
+
         comment = request.POST.get('comment', '')
-        if request.user != holder_was:
-            comment += f" (Сдал напарник: {request.user.get_full_name()})"
+        if request.user != holder_was and holder_was:
+            comment += f" (Принял: {request.user.get_full_name()})"
 
         MovementLog.objects.create(
             initiator=request.user, 
