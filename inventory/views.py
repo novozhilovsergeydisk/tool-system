@@ -277,6 +277,11 @@ def tool_edit(request, tool_id):
 def tool_issue(request, tool_id):
     tool = get_object_or_404(ToolInstance, pk=tool_id)
     if request.method == 'POST':
+        # ПРОВЕРКА: Нельзя выдавать сломанное
+        if tool.status == 'BROKEN' or tool.condition == 'BROKEN':
+            messages.error(request, f"⛔ Нельзя выдать сломанный инструмент: {tool.nomenclature.name}")
+            return redirect('tool_list')
+
         user = get_object_or_404(User, pk=request.POST.get('employee_id'))
         if tool.status == 'IN_STOCK':
             wh_was = tool.current_warehouse
@@ -307,6 +312,70 @@ def tool_writeoff(request, tool_id):
         reason = request.POST.get('reason', 'Списание')
         MovementLog.objects.create(initiator=request.user, action_type='WRITEOFF', nomenclature=tool.nomenclature, nomenclature_name=tool.nomenclature.name, nomenclature_article=tool.nomenclature.article, serial_number=tool.inventory_id, source_warehouse=tool.current_warehouse, source_user=tool.current_holder, comment=f"Причина: {reason}")
         tool.delete()
+    return redirect('tool_list')
+
+@login_required
+def tool_take_self(request, tool_id):
+    """Сотрудник берет инструмент на себя (с комментарием)"""
+    tool = get_object_or_404(ToolInstance, pk=tool_id)
+    
+    if request.method == 'POST':
+        # ПРОВЕРКА: Нельзя брать сломанное
+        if tool.status == 'BROKEN' or tool.condition == 'BROKEN':
+            messages.error(request, "⛔ Этот инструмент помечен как сломанный, его нельзя взять.")
+            return redirect('tool_list')
+
+        if tool.nomenclature.item_type in ['TOOL', 'EQUIPMENT'] and tool.status == 'IN_STOCK':
+            wh_was = tool.current_warehouse
+            tool.current_holder = request.user
+            tool.current_warehouse = None
+            tool.status = 'ISSUED'
+            tool.save()
+            
+            user_comment = request.POST.get('comment', '')
+            full_comment = f"Взял самостоятельно. {user_comment}"
+            
+            MovementLog.objects.create(
+                initiator=request.user, 
+                action_type='ISSUE', 
+                nomenclature=tool.nomenclature, 
+                tool_instance=tool, 
+                source_warehouse=wh_was, 
+                target_user=request.user, 
+                comment=full_comment
+            )
+            messages.success(request, f"Вы взяли: {tool.nomenclature.name}")
+        
+    return redirect('tool_list')
+
+@login_required
+def tool_return_self(request, tool_id):
+    """Сотрудник возвращает инструмент (с комментарием)"""
+    tool = get_object_or_404(ToolInstance, pk=tool_id)
+    
+    if request.method == 'POST':
+        if tool.current_holder == request.user:
+            target_wh = Warehouse.objects.first() # Возврат на основной склад
+            
+            tool.current_holder = None
+            tool.current_warehouse = target_wh
+            tool.status = 'IN_STOCK'
+            tool.save()
+            
+            user_comment = request.POST.get('comment', '')
+            full_comment = f"Вернул самостоятельно. {user_comment}"
+            
+            MovementLog.objects.create(
+                initiator=request.user, 
+                action_type='RETURN', 
+                nomenclature=tool.nomenclature, 
+                tool_instance=tool, 
+                source_user=request.user, 
+                target_warehouse=target_wh, 
+                comment=full_comment
+            )
+            messages.success(request, f"Вы вернули: {tool.nomenclature.name}")
+        
     return redirect('tool_list')
 
 # --- РАСХОДНИКИ (ТОЖЕ ПРОПУЩЕНЫ) ---
@@ -592,8 +661,14 @@ def kit_add_tool(request, kit_id):
     kit = get_object_or_404(ToolKit, pk=kit_id)
     if request.method == 'POST':
         tool = get_object_or_404(ToolInstance, pk=request.POST.get('tool_id'))
+        
+        # ПРОВЕРКА: Нельзя добавлять сломанное в комплект
+        if tool.status == 'BROKEN' or tool.condition == 'BROKEN':
+            messages.error(request, f"⛔ Нельзя добавить сломанный инструмент в комплект: {tool.nomenclature.name}")
+            return redirect(f'/kits/?kit_id={kit.id}')
+
         if tool.current_warehouse != kit.warehouse: return redirect(f'/kits/?kit_id={kit.id}')
-        tool.kit = kit; tool.save() # Привязка (шаблон)
+        tool.kit = kit; tool.save() 
     return redirect(f'/kits/?kit_id={kit.id}')
 
 @login_required
@@ -721,7 +796,7 @@ def kit_issue(request, kit_id):
 
 @login_required
 def kit_return(request, kit_id):
-    """ВОЗВРАТ КОМПЛЕКТА (С ОБЪЕДИНЕНИЕМ РАСХОДНИКОВ)"""
+    """ВОЗВРАТ: Возвращаем Инструменты И Расходники (привязанные к комплекту)"""
     kit = get_object_or_404(ToolKit, pk=kit_id)
     
     is_authorized = (
@@ -734,8 +809,7 @@ def kit_return(request, kit_id):
         wh = kit.warehouse if kit.warehouse else Warehouse.objects.first()
         holder_was = kit.current_holder
         
-        coworkers_list = [u.get_full_name() or u.username for u in kit.co_workers.all()]
-        returned_items_list = []
+        log_items = []
         
         # 1. ИНСТРУМЕНТЫ
         tools_to_return = ToolInstance.objects.filter(kit=kit, current_holder=holder_was)
@@ -744,45 +818,38 @@ def kit_return(request, kit_id):
             tool.current_warehouse = wh
             tool.status = 'IN_STOCK'
             tool.save()
-            returned_items_list.append(f"🔧 {tool.nomenclature.name} {tool.nomenclature.article} (№{tool.inventory_id})")
+            log_items.append(f"🔧 {tool.nomenclature.name} {tool.nomenclature.article} (№{tool.inventory_id})")
 
-        # 2. РАСХОДНИКИ (СЛИЯНИЕ)
+        # 2. РАСХОДНИКИ (ТЕПЕРЬ ВОЗВРАЩАЕМ)
+        # Ищем записи, которые:
+        # а) Привязаны к этому комплекту
+        # б) Находятся у текущего держателя
         cons_to_return = ConsumableBalance.objects.filter(kit=kit, holder=holder_was)
         
         for cons in cons_to_return:
-            # Ищем, есть ли уже такие расходники в этом комплекте на складе
-            # (Например, если часть оставалась невыданной)
-            existing_kit_bal = ConsumableBalance.objects.filter(
-                kit=kit, 
-                warehouse=wh, 
-                nomenclature=cons.nomenclature
-            ).first()
-
-            if existing_kit_bal:
-                # Если есть - приплюсовываем и удаляем запись сотрудника
-                existing_kit_bal.quantity += cons.quantity
-                existing_kit_bal.save()
-                cons.delete()
-            else:
-                # Если нет - просто перемещаем запись сотрудника на склад
-                cons.holder = None
-                cons.warehouse = wh
-                cons.save()
-
-            returned_items_list.append(f"🔩 {cons.nomenclature.name} {cons.nomenclature.article} ({cons.quantity} шт)")
+            cons.holder = None
+            cons.warehouse = wh # Возвращаем на склад (но оставляем в комплекте)
+            cons.save()
+            
+            # (Опционально) Слияние дублей на складе, если вдруг там уже лежит такой же остаток
+            # Но так как у нас уникальность (kit, warehouse, nomenclature), то дубля быть не должно, 
+            # если мы выдавали "под чистую". А если выдавали частично - то на складе осталась другая запись.
+            # В идеале тут можно добавить логику слияния, но для простоты пока просто вернем.
+            
+            log_items.append(f"🔩 {cons.nomenclature.name} {cons.nomenclature.article} ({cons.quantity} шт)")
 
         # 3. КОМПЛЕКТ
+        if kit.co_workers.exists():
+            names = [u.get_full_name() or u.username for u in kit.co_workers.all()]
+            log_items.append(f"\n👥 Сдала бригада: {', '.join(names)}")
+        
         kit.current_holder = None
         kit.co_workers.clear()
         kit.status = 'IN_STOCK'
         kit.save()
         
-        if not returned_items_list:
-            returned_items_list.append("Только кейс")
-            
-        if coworkers_list:
-            returned_items_list.append(f"\n👥 Бригада: {', '.join(coworkers_list)}")
-
+        if not log_items: log_items.append("Пустой кейс")
+        
         comment = request.POST.get('comment', '')
         if request.user != holder_was and holder_was:
             comment += f" (Принял: {request.user.get_full_name()})"
@@ -794,7 +861,7 @@ def kit_return(request, kit_id):
             nomenclature_article="КОМПЛЕКТ", 
             source_user=holder_was, 
             target_warehouse=wh, 
-            composition="\n".join(returned_items_list),
+            composition="\n".join(log_items),
             comment=comment
         )
     return redirect(f'/kits/?kit_id={kit.id}')
@@ -812,6 +879,8 @@ def bulk_issue(request):
                 type_, id_ = item['type'], item['id']
                 if type_ == 'tool':
                     tool = ToolInstance.objects.get(pk=id_)
+                    if tool.status == 'BROKEN' or tool.condition == 'BROKEN':
+                        continue # Пропускаем сломанные, не выдаем
                     if tool.status == 'IN_STOCK':
                         wh_was = tool.current_warehouse; kit_was = tool.kit
                         tool.current_holder = user; tool.current_warehouse = None; tool.status = 'ISSUED'; tool.save()

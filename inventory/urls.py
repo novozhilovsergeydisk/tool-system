@@ -72,4 +72,6 @@ urlpatterns = [
     path('api/employee/<int:employee_id>/items/', views.get_employee_items, name='get_employee_items'),
     path('api/return/item/', views.api_return_item, name='api_return_item'),
     path('api/writeoff/item/', views.api_writeoff_item, name='api_writeoff_item'),
+    path('tool/<int:tool_id>/take_self/', views.tool_take_self, name='tool_take_self'),
+    path('tool/<int:tool_id>/return_self/', views.tool_return_self, name='tool_return_self'),
 ]

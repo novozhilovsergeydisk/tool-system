@@ -10,7 +10,7 @@
                     <th>Владелец / Локация</th>
                     <th class="d-none d-md-table-cell">Состояние</th>
                     <th>Статус</th>
-                    {% if user.is_staff %} <th style="min-width: 140px; text-align: center;">Действия</th> {% endif %}
+                    <th style="min-width: 140px; text-align: center;">Действия</th>
                 </tr>
             </thead>
             <tbody>
@@ -38,7 +38,7 @@
                     <td>
                         {% if item.row_type == 'tool' %}
                             {% if item.current_holder %} 
-                                <span class="text-primary small text-nowrap"><i class="fa-solid fa-user"></i> {{ item.current_holder.get_full_name|default:item.current_holder.username }}</span>
+                                <span class="text-primary small text-nowrap fw-bold"><i class="fa-solid fa-user"></i> {{ item.current_holder.get_full_name|default:item.current_holder.username }}</span>
                             {% elif item.current_warehouse %} 
                                 <span class="text-body-secondary small text-nowrap"><i class="fa-solid fa-warehouse"></i> {{ item.current_warehouse.name }}</span>
                             {% else %} 
@@ -47,10 +47,9 @@
                             {% if item.kit %}
                                 <span class="badge bg-warning text-dark ms-1" title="В комплекте"><i class="fa-solid fa-toolbox"></i> {{ item.kit.name }}</span>
                             {% endif %}
-
                         {% else %}
                             {% if item.holder %}
-                                <span class="text-primary small text-nowrap"><i class="fa-solid fa-user"></i> {{ item.holder.get_full_name|default:item.holder.username }}</span>
+                                <span class="text-primary small text-nowrap fw-bold"><i class="fa-solid fa-user"></i> {{ item.holder.get_full_name|default:item.holder.username }}</span>
                             {% elif item.warehouse %}
                                 <span class="text-body-secondary small text-nowrap"><i class="fa-solid fa-warehouse"></i> {{ item.warehouse.name }}</span>
                             {% endif %}
@@ -60,7 +59,7 @@
                     <td class="d-none d-md-table-cell">
                         {% if item.row_type == 'tool' %}
                             {% if item.condition == 'NEW' %}<span class="badge rounded-pill text-bg-info text-white">Новое</span>
-                            {% elif item.condition == 'USED' %}<span class="badge rounded-pill bg-body-tertiary text-dark border">Б/У</span>
+                            {% elif item.condition == 'USED' %}<span class="badge rounded-pill text-bg-warning">Б/У</span>
                             {% elif item.condition == 'BROKEN' %}<span class="badge rounded-pill bg-danger">Сломано</span>
                             {% endif %}
                         {% else %}
@@ -75,40 +74,57 @@
                             {% elif item.status == 'BROKEN' %}<span class="badge bg-danger">В ремонте</span>
                             {% endif %}
                         {% else %}
-                            {% if item.warehouse %}
-                                <span class="badge bg-success">На складе</span>
-                            {% elif item.holder %}
-                                <span class="badge bg-warning text-dark">Выдано</span>
-                            {% else %}
-                                <span class="badge bg-secondary">?</span>
-                            {% endif %}
+                            {% if item.warehouse %}<span class="badge bg-success">На складе</span>
+                            {% elif item.holder %}<span class="badge bg-warning text-dark">Выдано</span>
+                            {% else %}<span class="badge bg-secondary">?</span>{% endif %}
                         {% endif %}
                     </td>
 
-                    {% if user.is_staff %}
                     <td align="center">
                         <div class="d-flex justify-content-center gap-1">
-                            {% if item.row_type == 'tool' %}
-                                {% if item.status == 'IN_STOCK' %}
-                                    <button class="btn btn-sm btn-warning text-dark" title="Выдать" data-bs-toggle="modal" data-bs-target="#issueModal" onclick="setIssueModal('{{ item.id }}', '{{ item.nomenclature.name }}')"><i class="fa-solid fa-hand-holding"></i></button>
-                                {% elif item.status == 'ISSUED' %}
-                                    <button class="btn btn-sm btn-success" title="Вернуть" data-bs-toggle="modal" data-bs-target="#returnModal" onclick="setReturnModal('{{ item.id }}', '{{ item.nomenclature.name }}')"><i class="fa-solid fa-share"></i></button>
-                                {% endif %}
-                                <a href="{% url 'tool_edit' item.id %}" class="btn btn-outline-secondary btn-sm" title="Ред."><i class="fa-solid fa-pencil"></i></a>
-                                <button class="btn btn-sm btn-danger" title="Списать" data-bs-toggle="modal" data-bs-target="#toolWriteoffModal" onclick="setToolWriteoffModal('{{ item.id }}', '{{ item.nomenclature.name }}', '{{ item.inventory_id }}')"><i class="fa-solid fa-fire"></i></button>
                             
+                            {% if user.is_staff %}
+                                {% if item.row_type == 'tool' %}
+                                    {% if item.status == 'IN_STOCK' %}
+                                        <button class="btn btn-sm btn-warning text-dark" title="Выдать сотруднику" data-bs-toggle="modal" data-bs-target="#issueModal" onclick="setIssueModal('{{ item.id }}', '{{ item.nomenclature.name }}')"><i class="fa-solid fa-hand-holding"></i></button>
+                                    {% elif item.status == 'ISSUED' %}
+                                        <button class="btn btn-sm btn-success" title="Вернуть на склад" data-bs-toggle="modal" data-bs-target="#returnModal" onclick="setReturnModal('{{ item.id }}', '{{ item.nomenclature.name }}')"><i class="fa-solid fa-share"></i></button>
+                                    {% endif %}
+                                    <a href="{% url 'tool_edit' item.id %}" class="btn btn-outline-secondary btn-sm" title="Ред."><i class="fa-solid fa-pencil"></i></a>
+                                    <button class="btn btn-sm btn-danger" title="Списать" data-bs-toggle="modal" data-bs-target="#toolWriteoffModal" onclick="setToolWriteoffModal('{{ item.id }}', '{{ item.nomenclature.name }}', '{{ item.inventory_id }}')"><i class="fa-solid fa-fire"></i></button>
+                                {% else %}
+                                    {% if item.warehouse and item.quantity > 0 %}
+                                        <button class="btn btn-sm btn-warning text-dark" title="Выдать" data-bs-toggle="modal" data-bs-target="#consumableIssueModal" onclick="setConsumableIssueModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-hand-holding"></i></button>
+                                    {% endif %}
+                                    {% if item.holder and item.quantity > 0 %}
+                                        <button class="btn btn-sm btn-success" title="Вернуть" data-bs-toggle="modal" data-bs-target="#consumableReturnModal" onclick="setConsumableReturnModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-share"></i></button>
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-danger" title="Списать" data-bs-toggle="modal" data-bs-target="#consumableWriteoffModal" onclick="setConsumableWriteoffModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-fire"></i></button>
+                                {% endif %}
+
                             {% else %}
-                                {% if item.warehouse and item.quantity > 0 %}
-                                    <button class="btn btn-sm btn-warning text-dark" title="Выдать" data-bs-toggle="modal" data-bs-target="#consumableIssueModal" onclick="setConsumableIssueModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-hand-holding"></i></button>
+                                {% if item.row_type == 'tool' %}
+                                    {% if item.status == 'IN_STOCK' %}
+                                        <button class="btn btn-sm btn-outline-primary fw-bold" 
+                                                data-bs-toggle="modal" data-bs-target="#takeSelfModal"
+                                                onclick="setTakeSelfModal('{{ item.id }}', '{{ item.nomenclature.name }}')">
+                                            Взять
+                                        </button>
+                                    
+                                    {% elif item.current_holder == user %}
+                                        <button class="btn btn-sm btn-outline-success fw-bold" 
+                                                data-bs-toggle="modal" data-bs-target="#returnSelfModal"
+                                                onclick="setReturnSelfModal('{{ item.id }}', '{{ item.nomenclature.name }}')">
+                                            Вернуть
+                                        </button>
+                                    
+                                    {% else %}
+                                        <span class="text-body-secondary small"><i class="fa-solid fa-lock"></i></span>
+                                    {% endif %}
                                 {% endif %}
-                                {% if item.holder and item.quantity > 0 %}
-                                    <button class="btn btn-sm btn-success" title="Вернуть" data-bs-toggle="modal" data-bs-target="#consumableReturnModal" onclick="setConsumableReturnModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-share"></i></button>
-                                {% endif %}
-                                <button class="btn btn-sm btn-danger" title="Списать" data-bs-toggle="modal" data-bs-target="#consumableWriteoffModal" onclick="setConsumableWriteoffModal('{{ item.id }}', '{{ item.nomenclature.name }}', {{ item.quantity }})"><i class="fa-solid fa-fire"></i></button>
                             {% endif %}
                         </div>
                     </td>
-                    {% endif %}
                 </tr>
                 {% empty %}
                 <tr><td colspan="7" class="text-center py-4 text-body-secondary">Товаров не найдено</td></tr>
@@ -126,9 +142,7 @@
                 {% else %}
                     <li class="page-item disabled"><span class="page-link"><i class="fa-solid fa-chevron-left"></i></span></li>
                 {% endif %}
-                
                 <li class="page-item disabled"><span class="page-link text-body-secondary">Стр. {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span></li>
-                
                 {% if page_obj.has_next %}
                     <li class="page-item"><a class="page-link ajax-link" href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&warehouse={{ request.GET.warehouse }}&employee={{ request.GET.employee }}&item_type={{ request.GET.item_type }}&status={{ request.GET.status }}"><i class="fa-solid fa-chevron-right"></i></a></li>
                 {% else %}
@@ -139,3 +153,63 @@
     </div>
     {% endif %}
 </div>
+
+{% if user.is_staff %}
+    <div class="modal fade" id="issueModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="issueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <strong id="issueToolName"></strong></p><label>Сотрудник:</label><select name="employee_id" class="form-select" required>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-primary">Выдать</button></div></form></div></div></div>
+    <div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="returnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат на склад</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возврат: <strong id="returnToolName"></strong></p><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
+    <div class="modal fade" id="toolWriteoffModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="toolWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-warning small"><i class="fa-solid fa-triangle-exclamation"></i> Инструмент будет удален из списка активных товаров!</div><p>Списать: <strong id="toolWriteName"></strong></p><p>Инв. №: <span id="toolWriteInv" class="font-monospace"></span></p><div class="mb-3"><label>Причина списания:</label><textarea name="reason" class="form-control" rows="3" placeholder="Например: Утерян, Сломан без возможности ремонта" required></textarea></div></div><div class="modal-footer"><button class="btn btn-danger">Подтвердить списание</button></div></form></div></div></div>
+
+    <div class="modal fade" id="consumableIssueModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableIssueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="consumableName"></strong></p><p class="text-body-secondary small">Доступно: <span id="consumableMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="consumableQty" class="form-control" min="1" required></div><div class="mb-3"><label>Сотрудник:</label><select name="employee_id" class="form-select" required>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-primary w-100">Выдать</button></div></form></div></div></div>
+    <div class="modal fade" id="consumableReturnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableReturnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="conRetName"></strong></p><p class="text-body-secondary small">На руках: <span id="conRetMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conRetQty" class="form-control" min="1" required></div><div class="mb-3"><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-success w-100">Вернуть</button></div></form></div></div></div>
+    <div class="modal fade" id="consumableWriteoffModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Списать: <strong id="conWriteName"></strong></p><p class="text-body-secondary small">Доступно: <span id="conWriteMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conWriteQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><input type="text" name="reason" class="form-control" placeholder="Сломано / Израсходовано" required></div></div><div class="modal-footer"><button class="btn btn-danger w-100">Списать</button></div></form></div></div></div>
+
+{% else %}
+    <div class="modal fade" id="takeSelfModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form method="post" id="takeSelfForm" action="">{% csrf_token %}
+        <div class="modal-header bg-primary text-white"><h5 class="modal-title">Взять инструмент</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Вы берете: <strong id="takeSelfName"></strong></p>
+            <div class="mb-3">
+                <label class="form-label">Комментарий (куда/зачем):</label>
+                <textarea name="comment" class="form-control" rows="2" placeholder="Например: На объект Ленина, 5"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary w-100">Подтвердить</button></div>
+        </form>
+    </div></div></div>
+
+    <div class="modal fade" id="returnSelfModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form method="post" id="returnSelfForm" action="">{% csrf_token %}
+        <div class="modal-header bg-success text-white"><h5 class="modal-title">Вернуть на склад</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Возврат: <strong id="returnSelfName"></strong></p>
+            <p class="small text-body-secondary">Инструмент будет возвращен на основной склад.</p>
+            <div class="mb-3">
+                <label class="form-label">Комментарий (состояние):</label>
+                <textarea name="comment" class="form-control" rows="2" placeholder="Например: Всё исправно"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-success w-100">Подтвердить возврат</button></div>
+        </form>
+    </div></div></div>
+{% endif %}
+
+<script>
+    // АДМИНСКИЕ
+    function setIssueModal(id, name) { document.getElementById('issueToolName').innerText = name; document.getElementById('issueForm').action = "/tool/" + id + "/issue/"; }
+    function setReturnModal(id, name) { document.getElementById('returnToolName').innerText = name; document.getElementById('returnForm').action = "/tool/" + id + "/return/"; }
+    function setToolWriteoffModal(id, name, inv) { document.getElementById('toolWriteName').innerText = name; document.getElementById('toolWriteInv').innerText = inv; document.getElementById('toolWriteoffForm').action = "/tool/" + id + "/writeoff/"; }
+    function setConsumableIssueModal(id, name, maxQty) { document.getElementById('consumableName').innerText = name; document.getElementById('consumableMax').innerText = maxQty; var i = document.getElementById('consumableQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableIssueForm').action = "/consumable/" + id + "/issue/"; }
+    function setConsumableReturnModal(id, name, maxQty) { document.getElementById('conRetName').innerText = name; document.getElementById('conRetMax').innerText = maxQty; var i = document.getElementById('conRetQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableReturnForm').action = "/consumable/" + id + "/return/"; }
+    function setConsumableWriteoffModal(id, name, maxQty) { document.getElementById('conWriteName').innerText = name; document.getElementById('conWriteMax').innerText = maxQty; var i = document.getElementById('conWriteQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableWriteoffForm').action = "/consumable/" + id + "/writeoff/"; }
+
+    // ПОЛЬЗОВАТЕЛЬСКИЕ
+    function setTakeSelfModal(id, name) {
+        document.getElementById('takeSelfName').innerText = name;
+        document.getElementById('takeSelfForm').action = "/tool/" + id + "/take_self/";
+    }
+    function setReturnSelfModal(id, name) {
+        document.getElementById('returnSelfName').innerText = name;
+        document.getElementById('returnSelfForm').action = "/tool/" + id + "/return_self/";
+    }
+</script>
