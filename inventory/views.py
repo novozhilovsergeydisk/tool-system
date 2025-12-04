@@ -137,41 +137,59 @@ def news_delete(request, pk):
         messages.success(request, "Новость удалена.")
     return redirect('index')
 
-
-# --- 3. СПИСОК ТОВАРОВ (ОБЩИЙ) ---
+# --- 3. СПИСОК ТОВАРОВ ---
 @login_required
 def tool_list(request):
     """Единая таблица всех товаров"""
-    
+    from django.db.models import Q
+    from itertools import chain
+
     # 1. Базовые запросы
-    # Инструменты: исключаем те, что в машинах (car__isnull=True)
+    # Инструменты: исключаем те, что в машинах
     tools = ToolInstance.objects.filter(car__isnull=True).select_related('nomenclature', 'current_warehouse', 'current_holder', 'kit')
-    # Расходники: исключаем те, что в комплектах
+    # Расходники: исключаем те, что в комплектах (они спрятаны в чемоданах)
     consumables = ConsumableBalance.objects.filter(kit__isnull=True).select_related('nomenclature', 'warehouse', 'holder')
     
+    # Данные для фильтров (для подсказок)
     employees = User.objects.filter(is_active=True).order_by('username')
     warehouses = Warehouse.objects.all().order_by('name')
 
     # 2. Фильтрация
-    search = request.GET.get('search', '')
+    search = request.GET.get('search', '').strip()
     wh_id = request.GET.get('warehouse', '')
-    emp_id = request.GET.get('employee', '')
+    emp_query = request.GET.get('employee', '').strip() # Получаем ТЕКСТ, а не ID
     type_filter = request.GET.get('item_type', '')
     status_filter = request.GET.get('status', '')
 
-    # Поиск
+    # ПОИСК (Добавили поиск по Названию Комплекта)
     if search:
-        tools = tools.filter(Q(nomenclature__name__icontains=search) | Q(inventory_id__icontains=search) | Q(nomenclature__article__icontains=search))
-        consumables = consumables.filter(Q(nomenclature__name__icontains=search) | Q(nomenclature__article__icontains=search))
+        # Инструменты: Имя, Инв.№, Артикул ИЛИ Название комплекта
+        tools = tools.filter(
+            Q(nomenclature__name__icontains=search) | 
+            Q(inventory_id__icontains=search) | 
+            Q(nomenclature__article__icontains=search) |
+            Q(kit__name__icontains=search) # <--- Ищем товары по названию их комплекта
+        )
+        # Расходники: Имя, Артикул (у них нет комплектов в этом списке)
+        consumables = consumables.filter(
+            Q(nomenclature__name__icontains=search) | 
+            Q(nomenclature__article__icontains=search)
+        )
     
-    # Фильтры
+    # Фильтр по СКЛАДУ
     if wh_id:
         tools = tools.filter(current_warehouse_id=wh_id)
         consumables = consumables.filter(warehouse_id=wh_id)
     
-    if emp_id:
-        tools = tools.filter(current_holder_id=emp_id)
-        consumables = consumables.filter(holder_id=emp_id)
+    # Фильтр по СОТРУДНИКУ (Теперь текстовый поиск)
+    if emp_query:
+        users_found = User.objects.filter(
+            Q(username__icontains=emp_query) | 
+            Q(first_name__icontains=emp_query) | 
+            Q(last_name__icontains=emp_query)
+        )
+        tools = tools.filter(current_holder__in=users_found)
+        consumables = consumables.filter(holder__in=users_found)
 
     # Фильтр по ТИПУ
     if type_filter:
@@ -190,27 +208,21 @@ def tool_list(request):
             tools = tools.filter(status='ISSUED')
             consumables = consumables.filter(holder__isnull=False)
 
-    # 3. Объединение и маркировка
-    for t in tools: 
-        t.row_type = 'tool'
-    
-    for c in consumables: 
-        c.row_type = 'consumable'
+    # 3. Объединение
+    for t in tools: t.row_type = 'tool'
+    for c in consumables: c.row_type = 'consumable'
 
-    # Объединяем два списка в один
     combined_list = list(chain(tools, consumables))
-
-    # 4. Сортировка (по имени)
     combined_list.sort(key=lambda x: x.nomenclature.name.lower())
 
-    # 5. Пагинация (10 записей на страницу)
+    # 4. Пагинация
     paginator = Paginator(combined_list, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     context = {
-        'items': page_obj, # Передаем как items
-        'page_obj': page_obj, # Объект пагинации
+        'items': page_obj,
+        'page_obj': page_obj,
         'employees': employees, 
         'warehouses': warehouses
     }

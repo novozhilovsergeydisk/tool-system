@@ -96,6 +96,32 @@
         var i = document.getElementById('removeConsQty'); i.max = maxQty; i.value = 1;
         document.getElementById('removeConsForm').action = "/kits/" + kitId + "/remove_consumable/" + balId + "/";
     };
-</script>
+	// === ФУНКЦИИ ДЛЯ КОНТЕНТА (МОДАЛКИ И ПОИСК) ===
+    
+    // Поиск в выпадающих списках (Инструменты и Расходники)
+    window.filterOptions = function(input, selectId) {
+        const filter = input.value.toLowerCase();
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        
+        const options = select.getElementsByTagName('option');
+        
+        for (let i = 0; i < options.length; i++) {
+            const txt = options[i].text.toLowerCase();
+            if (txt.includes(filter)) {
+                options[i].style.display = "";
+                options[i].hidden = false;  // Для надежности
+            } else {
+                options[i].style.display = "none";
+                options[i].hidden = true;   // Для надежности
+            }
+        }
+    };
 
+    // Функции для модалок (оставьте их, если они здесь были)
+    window.setRemoveToolModal = function(...) { ... };
+    window.setRemoveConsModal = function(...) { ... };
+    window.toggleAll = function(...) { ... };
+
+</script>
 {% endblock %}
