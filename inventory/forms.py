@@ -3,24 +3,16 @@ from django.contrib.auth.models import User
 from .models import Nomenclature, ToolInstance, ToolKit, Warehouse, Car, News
 from django.db.models import Q
 
-# 1. Форма для создания ВИДА товара (С УМНОЙ ПРОВЕРКОЙ)
+# 1. Форма для создания ВИДА товара
 class NomenclatureForm(forms.ModelForm):
-    # Скрытое поле подтверждения
-    confirm_save = forms.BooleanField(
-        required=False, 
-        initial=False,
-        widget=forms.HiddenInput() # По умолчанию скрыто
-    )
+    confirm_save = forms.BooleanField(required=False, initial=False, widget=forms.HiddenInput())
 
     class Meta:
         model = Nomenclature
         fields = ['name', 'article', 'item_type', 'minimum_stock', 'description']
         labels = {
-            'name': 'Название',
-            'article': 'Артикул',
-            'item_type': 'Тип',
-            'minimum_stock': 'Мин. остаток',
-            'description': 'Описание'
+            'name': 'Название', 'article': 'Артикул', 'item_type': 'Тип',
+            'minimum_stock': 'Мин. остаток', 'description': 'Описание'
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -37,49 +29,35 @@ class NomenclatureForm(forms.ModelForm):
         confirm = cleaned_data.get('confirm_save')
 
         if name and article:
-            # 1. ПОЛНОЕ СОВПАДЕНИЕ (Блокируем намертво)
-            # Исключаем self.instance, если это редактирование существующего
             exact_match = Nomenclature.objects.filter(name__iexact=name, article__iexact=article)
             if self.instance.pk:
                 exact_match = exact_match.exclude(pk=self.instance.pk)
             
             if exact_match.exists():
-                raise forms.ValidationError("⛔ ОШИБКА: Товар с таким Названием И Артикулом уже существует! Дубликаты запрещены.")
+                raise forms.ValidationError("⛔ ОШИБКА: Товар с таким Названием И Артикулом уже существует!")
 
-            # 2. ЧАСТИЧНОЕ СОВПАДЕНИЕ (Предупреждаем)
-            # Если галочка подтверждения НЕ стоит - проверяем
             if not confirm:
                 similar = Nomenclature.objects.filter(Q(name__iexact=name) | Q(article__iexact=article))
                 if self.instance.pk:
                     similar = similar.exclude(pk=self.instance.pk)
                 
                 if similar.exists():
-                    # Нашли похожий товар
                     obj = similar.first()
-                    msg = f"Внимание! В базе уже есть: «{obj.name}» [{obj.article}]. Вы уверены, что «{name}» [{article}] — это другой товар?"
-                    
-                    # Делаем поле подтверждения видимым чекбоксом
+                    msg = f"Внимание! В базе уже есть: «{obj.name}» [{obj.article}]. Это точно другой товар?"
                     self.fields['confirm_save'].widget = forms.CheckboxInput(attrs={'class': 'form-check-input'})
-                    self.fields['confirm_save'].label = "Да, я уверен, это разные товары. Сохранить."
-                    
-                    # Вызываем ошибку формы, чтобы остановить сохранение и показать сообщение
+                    self.fields['confirm_save'].label = "Да, я уверен. Сохранить."
                     raise forms.ValidationError(msg)
-
         return cleaned_data
 
-# 2. Форма для ПРИХОДА (УПРОЩЕННАЯ)
+# 2. Форма для ПРИХОДА
 class ToolInstanceForm(forms.ModelForm):
     quantity = forms.IntegerField(
-        label='Количество', 
-        initial=1, 
-        min_value=1,
-        required=False,
+        label='Количество', initial=1, min_value=1, required=False,
         widget=forms.NumberInput(attrs={'class': 'form-control'})
     )
 
     class Meta:
         model = ToolInstance
-        # УБРАЛИ: 'purchase_date', 'status'
         fields = ['nomenclature', 'inventory_id', 'current_warehouse', 'condition']
         labels = {
             'nomenclature': 'Что принимаем (Номенклатура)',
@@ -93,100 +71,97 @@ class ToolInstanceForm(forms.ModelForm):
             'current_warehouse': forms.Select(attrs={'class': 'form-select'}),
             'condition': forms.Select(attrs={'class': 'form-select'}),
         }
-        error_messages = {
-            'inventory_id': {
-                'unique': "Такой товар уже есть в системе! (Инвентарный номер должен быть уникальным)",
-            }
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['inventory_id'].required = False
-        
         if not self.instance.pk:
             self.fields['current_warehouse'].required = True
             self.fields['current_warehouse'].label = "На какой склад принять (Обязательно)"
 
-# 3. Форма сотрудника
-class EmployeeForm(forms.ModelForm):
-    new_password = forms.CharField(
-        label='Новый пароль',
-        required=False,
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Оставьте пустым, если не меняете'}),
-        help_text='Введите сюда новый пароль, чтобы изменить его.'
+# --- НОВЫЕ ФОРМЫ СОТРУДНИКОВ ---
+
+# 3.1. Форма СОЗДАНИЯ (С паролем и правами)
+class EmployeeAddForm(forms.ModelForm):
+    password = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={'class': 'form-control'}), required=True)
+    
+    is_superuser = forms.BooleanField(
+        label="Администратор (Полный доступ)", 
+        required=False, 
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Дает полный доступ ко всем складам и настройкам."
     )
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff']
-        
-        labels = {
-            'username': 'Логин',
-            'first_name': 'Имя',
-            'last_name': 'Фамилия',
-            'email': 'Email',
-            'is_active': 'Активен (доступ разрешен)',
-            'is_staff': 'Администратор (полный доступ)'
-        }
-        help_texts = {
-            'username': 'Обязательно. Не более 150 символов. Только буквы, цифры и символы @/./+/-/_.',
-            'is_active': 'Отметьте, если пользователь должен иметь доступ к сайту. Снимите галочку вместо удаления аккаунта.',
-            'is_staff': 'Отметьте, если пользователь может входить в панель администратора и видеть расширенное меню.',
-        }
+        fields = ['username', 'first_name', 'last_name', 'email', 'password']
+        labels = {'username': 'Логин', 'first_name': 'Имя', 'last_name': 'Фамилия', 'email': 'Email'}
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-# 4. Форма Комплекта
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data["password"])
+        if self.cleaned_data["is_superuser"]:
+            user.is_superuser = True
+            user.is_staff = True
+        if commit:
+            user.save()
+        return user
+
+# 3.2. Форма РЕДАКТИРОВАНИЯ (Без пароля и прав)
+class EmployeeEditForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email']
+        labels = {'username': 'Логин', 'first_name': 'Имя', 'last_name': 'Фамилия', 'email': 'Email'}
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'username' in self.fields:
+            self.fields['username'].disabled = True
+
+# 4. Остальные формы (без изменений)
 class ToolKitForm(forms.ModelForm):
     class Meta:
         model = ToolKit
         fields = ['name', 'description', 'warehouse']
-        labels = {
-            'name': 'Название комплекта',
-            'description': 'Описание',
-            'warehouse': 'Склад приписки (где хранится)'
-        }
+        labels = {'name': 'Название комплекта', 'description': 'Описание', 'warehouse': 'Склад приписки'}
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
         }
 
-# 5. Форма Склада
 class WarehouseForm(forms.ModelForm):
     class Meta:
         model = Warehouse
         fields = ['name', 'address']
-        labels = {
-            'name': 'Название склада',
-            'address': 'Адрес / Местоположение'
-        }
+        labels = {'name': 'Название склада', 'address': 'Адрес'}
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'address': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
-# 6. Форма Автомобиля
 class CarForm(forms.ModelForm):
     class Meta:
         model = Car
         fields = ['name', 'license_plate', 'fuel_type', 'is_truck', 'current_mileage', 'last_service_mileage', 'last_ti_date', 'insurance_expiry', 'checklist', 'description']
         labels = {
-            'name': 'Марка и Модель',
-            'license_plate': 'Госномер',
-            'fuel_type': 'Тип топлива',
-            'is_truck': 'Это грузовой автомобиль',
-            'current_mileage': 'Текущий пробег (км)',
-            'last_service_mileage': 'Пробег на последнем ТО',
-            'last_ti_date': 'Дата последнего ТЕХОСМОТРА',
-            'insurance_expiry': 'Дата окончания страховки',
-            'checklist': 'Текст напоминания при выдаче',
+            'name': 'Марка и Модель', 'license_plate': 'Госномер', 'fuel_type': 'Тип топлива',
+            'is_truck': 'Это грузовой автомобиль', 'current_mileage': 'Текущий пробег (км)',
+            'last_service_mileage': 'Пробег на последнем ТО', 'last_ti_date': 'Дата последнего ТЕХОСМОТРА',
+            'insurance_expiry': 'Дата окончания страховки', 'checklist': 'Текст напоминания при выдаче',
             'description': 'Описание'
         }
         widgets = {
@@ -202,7 +177,6 @@ class CarForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
-# 7. Форма Новости
 class NewsForm(forms.ModelForm):
     class Meta:
         model = News

@@ -1,33 +1,54 @@
 {% extends 'inventory/base.html' %}
 
 {% block content %}
-<div class="row justify-content-center mt-4">
+<div class="row justify-content-center mt-5">
     <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fa-solid fa-pencil"></i> Редактирование товара</h5>
+        <div class="card shadow-lg bg-body">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fa-solid fa-pen-to-square"></i> Редактирование</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Редактирование: <strong>{{ tool.nomenclature.name }}</strong> ({{ tool.inventory_id }})
-                </p>
-
                 <form method="post">
                     {% csrf_token %}
-                    
-                    {% for field in form %}
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}
-                            <div class="form-text">{{ field.help_text }}</div>
+                        <label class="form-label text-body-secondary small text-uppercase fw-bold">Номенклатура</label>
+                        <input type="text" class="form-control bg-body-secondary text-body fw-bold" 
+                               value="{{ tool.nomenclature.name }} {{ tool.nomenclature.article }}" disabled>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Инвентарный номер / S/N</label>
+                            <input type="text" name="inventory_id" class="form-control" value="{{ tool.inventory_id }}" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Состояние</label>
+                            <select name="condition" class="form-select">
+                                <option value="NEW" {% if tool.condition == 'NEW' %}selected{% endif %}>Новое</option>
+                                <option value="USED" {% if tool.condition == 'USED' %}selected{% endif %}>Б/У (Рабочее)</option>
+                                <option value="BROKEN" {% if tool.condition == 'BROKEN' %}selected{% endif %}>Сломано (Ремонт)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 small border-0">
+                        <i class="fa-solid fa-location-dot"></i> Сейчас находится: 
+                        {% if tool.current_warehouse %}
+                            <strong>Склад "{{ tool.current_warehouse.name }}"</strong>
+                        {% elif tool.current_holder %}
+                            <strong>У сотрудника: {{ tool.current_holder.get_full_name }}</strong>
+                        {% else %}
+                            Неизвестно
                         {% endif %}
                     </div>
-                    {% endfor %}
 
-                    <div class="d-flex justify-content-between mt-4">
-                        <a href="{% url 'index' %}" class="btn btn-secondary">Отмена</a>
-                        <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                    <hr>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'tool_list' %}" class="btn btn-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-primary fw-bold px-4">Сохранить изменения</button>
                     </div>
                 </form>
             </div>

@@ -1,14 +1,16 @@
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4 border-0">
     <div class="card-body p-0 bg-body table-responsive">
         <table class="table table-hover table-custom mb-0 align-middle">
-            <thead>
+            <thead class="bg-body-secondary">
                 <tr>
                     <th>Название</th>
                     <th>Артикул</th>
                     <th>Тип</th>
                     <th>Мин. остаток</th>
                     <th>Описание</th>
-                    {% if user.is_staff %} <th style="text-align: center;">Действия</th> {% endif %}
+                    {% if user.is_superuser or perms.inventory.change_nomenclature or perms.inventory.delete_nomenclature %}
+                        <th style="text-align: center;">Действия</th> 
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -19,8 +21,10 @@
                     <td>
                         {% if item.item_type == 'TOOL' %}
                             <span class="badge bg-secondary">Инструмент</span>
+                        {% elif item.item_type == 'EQUIPMENT' %}
+                            <span class="badge bg-info text-dark">Экипировка</span>
                         {% else %}
-                            <span class="badge bg-info text-dark">Расходник</span>
+                            <span class="badge bg-warning text-dark">Расходник</span>
                         {% endif %}
                     </td>
                     <td>
@@ -36,19 +40,25 @@
                     </td>
                     <td class="small text-body-secondary">{{ item.description|truncatechars:30 }}</td>
                     
-                    {% if user.is_staff %}
+                    {% if user.is_superuser or perms.inventory.change_nomenclature or perms.inventory.delete_nomenclature %}
                     <td align="center">
                         <div class="d-flex justify-content-center gap-1">
+                            
+                            {% if user.is_superuser or perms.inventory.change_nomenclature %}
                             <a href="{% url 'nomenclature_edit' item.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                 <i class="fa-solid fa-pen"></i>
                             </a>
+                            {% endif %}
                             
+                            {% if user.is_superuser or perms.inventory.delete_nomenclature %}
                             <form action="{% url 'nomenclature_delete' item.id %}" method="post" onsubmit="return confirm('Удалить номенклатуру {{ item.name }}?');">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </form>
+                            {% endif %}
+                            
                         </div>
                     </td>
                     {% endif %}

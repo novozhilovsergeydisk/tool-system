@@ -5,19 +5,25 @@
 <div class="d-flex justify-content-between align-items-center mb-3 mt-2 flex-wrap gap-2">
     <h3 style="margin:0;">📦 Товары</h3>
     
-    {% if user.is_staff %}
-    <div class="d-flex gap-2">
-        <a href="{% url 'nomenclature_list' %}" class="btn btn-primary btn-sm shadow-sm">
-            <i class="fa-solid fa-book"></i> Номенклатуры
-        </a>
-        <a href="{% url 'print_barcodes' %}" class="btn btn-info btn-sm shadow-sm text-white">
-            <i class="fa-solid fa-print"></i> Печать
-        </a>
-        <a href="{% url 'tool_add' %}" class="btn btn-success btn-sm shadow-sm fw-bold">
-            <i class="fa-solid fa-plus"></i> Добавить товар
-        </a>
+<div class="d-flex gap-2">
+        {% if user.is_superuser or perms.inventory.change_nomenclature or perms.inventory.add_nomenclature %}
+            <a href="{% url 'nomenclature_list' %}" class="btn btn-primary btn-sm shadow-sm">
+                <i class="fa-solid fa-book"></i> Номенклатуры
+            </a>
+        {% endif %}
+
+        {% if user.is_superuser or perms.inventory.view_nomenclature %}
+            <a href="{% url 'print_barcodes' %}" class="btn btn-info btn-sm shadow-sm text-white">
+                <i class="fa-solid fa-print"></i> Печать
+            </a>
+        {% endif %}
+
+        {% if user.is_superuser or perms.inventory.add_toolinstance %}
+            <a href="{% url 'tool_add' %}" class="btn btn-success btn-sm shadow-sm fw-bold">
+                <i class="fa-solid fa-plus"></i> Добавить товар
+            </a>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <div class="filter-box">
@@ -25,8 +31,8 @@
     <form method="GET" id="filterForm" class="row g-2 align-items-end">
         
         <div class="col-md-3">
-            <label class="form-label small text-body-secondary">Поиск товара</label>
-            <input type="text" name="search" class="form-control form-control-sm" value="{{ request.GET.search }}" placeholder="Название / Инв.№ / Комплект">
+            <label class="form-label small text-body-secondary">Поиск товара / комплекта</label>
+            <input type="text" name="search" class="form-control form-control-sm" value="{{ request.GET.search }}" placeholder="Название, HILTI, H-1...">
         </div>
         
         <div class="col-md-2">
@@ -63,7 +69,7 @@
             <input type="text" name="employee" class="form-control form-control-sm" 
                    value="{{ request.GET.employee }}" 
                    list="employeeListOptions" 
-                   placeholder="Начните вводить...">
+                   placeholder="Имя Фамилия...">
             
             <datalist id="employeeListOptions">
                 {% for emp in employees %}
@@ -83,60 +89,40 @@
     {% include 'inventory/tool_list_content.html' %}
 </div>
 
-{% if user.is_staff %}
-    <div class="modal fade" id="issueModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="issueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Выдаем: <strong id="issueToolName"></strong></p><label>Сотрудник:</label><select name="employee_id" class="form-select" required>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-primary w-100">Выдать</button></div></form></div></div></div>
-    <div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="returnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат на склад</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возврат: <strong id="returnToolName"></strong></p><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div><div class="modal-footer"><button class="btn btn-success w-100">Вернуть</button></div></form></div></div></div>
-    <div class="modal fade" id="toolWriteoffModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="toolWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание инструмента</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-warning small"><i class="fa-solid fa-triangle-exclamation"></i> Инструмент будет удален из списка активных товаров!</div><p>Списать: <strong id="toolWriteName"></strong></p><p>Инв. №: <span id="toolWriteInv" class="font-monospace"></span></p><div class="mb-3"><label>Причина списания:</label><textarea name="reason" class="form-control" rows="3" placeholder="Например: Утерян, Сломан без возможности ремонта" required></textarea></div></div><div class="modal-footer"><button class="btn btn-danger w-100">Подтвердить списание</button></div></form></div></div></div>
-    <div class="modal fade" id="consumableIssueModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableIssueForm" action="">{% csrf_token %}<div class="modal-header bg-warning"><h5 class="modal-title">Выдача расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="consumableName"></strong></p><p class="text-body-secondary small">Доступно: <span id="consumableMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="consumableQty" class="form-control" min="1" required></div><div class="mb-3"><label>Сотрудник:</label><select name="employee_id" class="form-select" required>{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-primary w-100">Выдать</button></div></form></div></div></div>
-    <div class="modal fade" id="consumableReturnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableReturnForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Товар: <strong id="conRetName"></strong></p><p class="text-body-secondary small">На руках: <span id="conRetMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conRetQty" class="form-control" min="1" required></div><div class="mb-3"><label>На склад:</label><select name="warehouse_id" class="form-select" required>{% for wh in warehouses %}<option value="{{ wh.id }}">{{ wh.name }}</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn btn-success w-100">Вернуть</button></div></form></div></div></div>
-    <div class="modal fade" id="consumableWriteoffModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="consumableWriteoffForm" action="">{% csrf_token %}<div class="modal-header bg-danger text-white"><h5 class="modal-title">Списание расходников</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Списать: <strong id="conWriteName"></strong></p><p class="text-body-secondary small">Доступно: <span id="conWriteMax"></span></p><div class="mb-3"><label>Количество:</label><input type="number" name="quantity" id="conWriteQty" class="form-control" min="1" required></div><div class="mb-3"><label>Причина:</label><input type="text" name="reason" class="form-control" placeholder="Сломано / Израсходовано" required></div></div><div class="modal-footer"><button class="btn btn-danger w-100">Списать</button></div></form></div></div></div>
-{% else %}
-    <div class="modal fade" id="takeSelfModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="takeSelfForm" action="">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Взять инструмент</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Вы берете: <strong id="takeSelfName"></strong></p><div class="mb-3"><label class="form-label">Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-primary w-100">Подтвердить</button></div></form></div></div></div>
-    <div class="modal fade" id="returnSelfModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="returnSelfForm" action="">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Вернуть на склад</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Возврат: <strong id="returnSelfName"></strong></p><div class="mb-3"><label class="form-label">Комментарий:</label><textarea name="comment" class="form-control" rows="2"></textarea></div></div><div class="modal-footer"><button class="btn btn-success w-100">Подтвердить возврат</button></div></form></div></div></div>
-{% endif %}
-
 <script>
-    const container = document.getElementById('tableContainer');
-    const filterForm = document.getElementById('filterForm');
+    document.addEventListener("DOMContentLoaded", function() {
+        document.body.addEventListener('click', function(e) {
+            if (e.target.closest('.ajax-link')) {
+                e.preventDefault();
+                const url = e.target.closest('.ajax-link').href;
+                fetchTable(url);
+            }
+        });
 
-    function loadData(url) {
-        container.style.opacity = '0.5';
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(response => response.text())
-        .then(html => {
-            container.innerHTML = html;
-            container.style.opacity = '1';
-            history.pushState(null, '', url);
-        })
-        .catch(err => { console.error('Ошибка:', err); container.style.opacity = '1'; });
-    }
+        const filterForm = document.getElementById('filterForm');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams(formData).toString();
+                const url = "{% url 'tool_list' %}?" + params;
+                fetchTable(url);
+                window.history.pushState(null, '', url);
+            });
+        }
 
-    container.addEventListener('click', function(e) {
-        const link = e.target.closest('.ajax-link');
-        if (link) {
-            e.preventDefault();
-            loadData(link.href);
+        function fetchTable(url) {
+            const container = document.getElementById('tableContainer');
+            container.style.opacity = '0.5';
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(response => response.text())
+            .then(html => {
+                container.innerHTML = html;
+                container.style.opacity = '1';
+            })
+            .catch(err => { console.error(err); container.style.opacity = '1'; });
         }
     });
-
-    filterForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(filterForm);
-        const queryString = new URLSearchParams(formData).toString();
-        loadData(`${window.location.pathname}?${queryString}`);
-    });
-
-    // Модалки (Админ)
-    function setIssueModal(id, name) { document.getElementById('issueToolName').innerText = name; document.getElementById('issueForm').action = "/tool/" + id + "/issue/"; }
-    function setReturnModal(id, name) { document.getElementById('returnToolName').innerText = name; document.getElementById('returnForm').action = "/tool/" + id + "/return/"; }
-    function setToolWriteoffModal(id, name, inv) { document.getElementById('toolWriteName').innerText = name; document.getElementById('toolWriteInv').innerText = inv; document.getElementById('toolWriteoffForm').action = "/tool/" + id + "/writeoff/"; }
-    function setConsumableIssueModal(id, name, maxQty) { document.getElementById('consumableName').innerText = name; document.getElementById('consumableMax').innerText = maxQty; var i = document.getElementById('consumableQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableIssueForm').action = "/consumable/" + id + "/issue/"; }
-    function setConsumableReturnModal(id, name, maxQty) { document.getElementById('conRetName').innerText = name; document.getElementById('conRetMax').innerText = maxQty; var i = document.getElementById('conRetQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableReturnForm').action = "/consumable/" + id + "/return/"; }
-    function setConsumableWriteoffModal(id, name, maxQty) { document.getElementById('conWriteName').innerText = name; document.getElementById('conWriteMax').innerText = maxQty; var i = document.getElementById('conWriteQty'); i.max = maxQty; i.value = 1; document.getElementById('consumableWriteoffForm').action = "/consumable/" + id + "/writeoff/"; }
-    
-    // Модалки (Юзер)
-    function setTakeSelfModal(id, name) { document.getElementById('takeSelfName').innerText = name; document.getElementById('takeSelfForm').action = "/tool/" + id + "/take_self/"; }
-    function setReturnSelfModal(id, name) { document.getElementById('returnSelfName').innerText = name; document.getElementById('returnSelfForm').action = "/tool/" + id + "/return_self/"; }
 </script>
 
 {% endblock %}

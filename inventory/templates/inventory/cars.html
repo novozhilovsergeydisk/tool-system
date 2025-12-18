@@ -1,11 +1,12 @@
 {% extends 'inventory/base.html' %}
 
 {% block content %}
+
 <div class="row h-100">
     <div class="col-md-4 border-end bg-body p-3" style="min-height: 85vh;">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0"><i class="fa-solid fa-car-side"></i> Автомобили</h5>
-            {% if user.is_staff %}
+            {% if user.is_staff or perms.inventory.add_car %}
             <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#createCarModal">
                 <i class="fa-solid fa-plus"></i> Создать
             </button>
@@ -14,7 +15,7 @@
         
         <div class="list-group" id="carSidebar">
             {% for car in cars %}
-            <a href="?car_id={{ car.id }}" class="list-group-item list-group-item-action {% if selected_car and selected_car.id == car.id %}active{% endif %}">
+            <a href="?car_id={{ car.id }}" class="list-group-item list-group-item-action {% if selected_car.id == car.id %}active{% endif %}">
                 <div class="d-flex w-100 justify-content-between align-items-start">
                     <h6 class="mb-1">
                         {{ car.name }}
@@ -24,8 +25,8 @@
                         {% if car.status == 'PARKED' %} <span class="badge bg-success">На парковке</span>
                         {% elif car.status == 'ON_ROUTE' %} <span class="badge bg-warning text-dark">На выезде</span>
                         {% elif car.status == 'MAINTENANCE' %} <span class="badge bg-secondary">На ТО</span>
-                        {% elif car.status == 'TECH_INSPECTION' %} <span class="badge bg-info text-dark">На Техосмотре</span>
-                        {% elif car.status == 'BROKEN' %} <span class="badge bg-danger">СЛОМАН</span>
+                        {% elif car.status == 'TECH_INSPECTION' %} <span class="badge bg-info text-dark">На техосмотре</span>
+                        {% elif car.status == 'BROKEN' %} <span class="badge bg-dark">СЛОМАН</span>
                         {% endif %}
                     </small>
                 </div>
@@ -33,12 +34,12 @@
                     <small class="font-monospace">{{ car.license_plate }}</small>
                     
                     <div class="d-flex gap-1">
-                        {% if car.service_status == 'warning' %} <span class="badge bg-warning text-dark" title="Скоро ТО"><i class="fa-solid fa-wrench"></i></span>{% endif %}
-                        {% if car.service_status == 'danger' %} <span class="badge bg-danger" title="ТО просрочено!"><i class="fa-solid fa-wrench"></i></span>{% endif %}
+                        {% if car.service_status == 'warning' %} <span class="badge bg-warning text-dark" title="Скоро ТО"><i class="fa-solid fa-wrench"></i></span>
+                        {% elif car.service_status == 'danger' %} <span class="badge bg-danger" title="ТО просрочено!"><i class="fa-solid fa-wrench"></i></span>
+                        {% endif %}
                         
-                        {% if car.is_truck %}
-                            {% if car.ti_status == 'warning' %} <span class="badge bg-warning text-dark" title="Скоро Техосмотр (год)"><i class="fa-solid fa-clipboard-list"></i></span>{% endif %}
-                            {% if car.ti_status == 'danger' %} <span class="badge bg-danger" title="Техосмотр просрочен!"><i class="fa-solid fa-clipboard-list"></i></span>{% endif %}
+                        {% if car.ti_status == 'warning' %} <span class="badge bg-warning text-dark" title="Скоро Техосмотр"><i class="fa-solid fa-clipboard-list"></i></span>
+                        {% elif car.ti_status == 'danger' %} <span class="badge bg-danger" title="Техосмотр просрочен!"><i class="fa-solid fa-clipboard-list"></i></span>
                         {% endif %}
 
                         {% if car.insurance_expiry and car.insurance_expiry <= warning_date %}
@@ -53,17 +54,21 @@
                 {% endif %}
             </a>
             {% empty %}
-            <div class="text-center text-body-secondary py-4">Нет автомобилей</div>
+                <div class="text-center p-3 text-muted">Нет автомобилей</div>
             {% endfor %}
         </div>
     </div>
 
     <div class="col-md-8 p-4 bg-body-tertiary" id="carContent">
-        {% include 'inventory/cars_content.html' %}
+        {% if selected_car %}
+            {% include 'inventory/cars_content.html' %}
+        {% else %}
+            <div class="text-center text-body-secondary mt-5"><i class="fa-solid fa-car fa-3x mb-3"></i><h4>Выберите автомобиль слева</h4></div>
+        {% endif %}
     </div>
 </div>
 
-{% if user.is_staff %}
+{% if user.is_staff or perms.inventory.add_car %}
 <div class="modal fade" id="createCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_create' %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Новый автомобиль</h5></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Марка/Модель</label>{{ form.name }}</div><div class="mb-3"><label class="fw-bold">Госномер</label>{{ form.license_plate }}</div><div class="mb-3"><label class="fw-bold">Топливо</label>{{ form.fuel_type }}</div><div class="mb-3"><label class="fw-bold">Это грузовой?</label> {{ form.is_truck }}</div><div class="mb-3"><label class="fw-bold">Начальный пробег</label>{{ form.current_mileage }}</div><div class="mb-3"><label class="fw-bold">Посл. ТО (км)</label>{{ form.last_service_mileage }}</div><div class="mb-3"><label class="fw-bold">Посл. Техосмотр</label>{{ form.last_ti_date }}</div><div class="mb-3"><label class="fw-bold">Страховка до</label>{{ form.insurance_expiry }}</div><div class="mb-3"><label class="fw-bold">Чек-лист</label>{{ form.checklist }}</div><div class="mb-3"><label>Описание</label>{{ form.description }}</div></div><div class="modal-footer"><button class="btn btn-success">Создать</button></div></form></div></div></div>
 {% endif %}
 

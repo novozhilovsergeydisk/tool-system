@@ -1,6 +1,8 @@
 from django.db import models
-from django.contrib.auth.models import User
 from datetime import date, timedelta
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User, Permission
 
 # --- 1. СПРАВОЧНИКИ ---
 
@@ -128,6 +130,15 @@ class ToolInstance(models.Model):
     status = models.CharField("Статус", max_length=20, choices=STATUS_CHOICES, default='IN_STOCK')
     CONDITION_CHOICES = (('NEW', 'Новое'), ('USED', 'Б/У'), ('BROKEN', 'Сломано'))
     condition = models.CharField("Состояние", max_length=20, choices=CONDITION_CHOICES, default='NEW')
+    @property
+    def is_manual_issue(self):
+        """Проверяет, был ли инструмент выдан ВРУЧНУЮ (последняя запись = ISSUE)"""
+        # Берем последнюю запись лога для этого инструмента
+        last_log = self.movementlog_set.order_by('-id').first()
+        # Если запись есть И тип действия 'ISSUE' (Ручная выдача), а не 'KIT_ISSUE'
+        if last_log and last_log.action_type == 'ISSUE':
+            return True
+        return False
     def __str__(self): return f"{self.nomenclature.name} [#{self.inventory_id}]"
     class Meta: verbose_name = "Экземпляр инструмента"; verbose_name_plural = "Инструменты (Учет)"
 
@@ -165,6 +176,7 @@ class MovementLog(models.Model):
         ('CAR_ISSUE', 'Выдача Авто'), ('CAR_RETURN', 'Возврат Авто'),
         ('CAR_TO_MAINT', 'Отправка на ТО'), ('CAR_FROM_MAINT', 'Возврат с ТО'),
         ('CAR_TO_TI', 'Отправка на Техосмотр'), ('CAR_FROM_TI', 'Возврат с Техосмотра'), # НОВЫЕ
+        ('KIT_EDIT', 'Редактирование комплекта'),
     )
 
     date = models.DateTimeField("Дата и время", auto_now_add=True)
@@ -224,3 +236,60 @@ class News(models.Model):
 
     def __str__(self): return self.title
     class Meta: verbose_name = "Новость"; verbose_name_plural = "Новости"
+
+# --- 9. ПРОФИЛЬ СОТРУДНИКА (Доступы) ---
+class EmployeeProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    allowed_warehouses = models.ManyToManyField(Warehouse, blank=True, verbose_name="Доступные склады")
+    
+    def __str__(self):
+        return f"Профиль: {self.user.username}"
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        EmployeeProfile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+    else:
+        EmployeeProfile.objects.get_or_create(user=instance)
+
+# ==========================================
+# АВТОМАТИЧЕСКАЯ НАСТРОЙКА НОВИЧКОВ
+# ==========================================
+
+@receiver(post_save, sender=User)
+def assign_default_permissions(sender, instance, created, **kwargs):
+    """
+    Срабатывает при создании нового пользователя.
+    1. Создает профиль.
+    2. Выдает доступ к первому складу (Основному).
+    3. Дает право на "Печать" (просмотр номенклатуры).
+    """
+    # Срабатываем только один раз при создании, и не трогаем суперюзеров
+    if created and not instance.is_superuser:
+        
+        # 1. Создаем профиль сотрудника
+        # (Импорт внутри функции, чтобы избежать циклических ссылок, если они возникнут)
+        from .models import EmployeeProfile, Warehouse
+        profile, _ = EmployeeProfile.objects.get_or_create(user=instance)
+        
+        # 2. Выдаем доступ к ПЕРВОМУ складу в базе (Основной)
+        main_warehouse = Warehouse.objects.first()
+        if main_warehouse:
+            profile.allowed_warehouses.add(main_warehouse)
+        
+        profile.save()
+
+        # 3. Выдаем минимальные права (чтобы работала кнопка "Печать")
+        # Если нужно, чтобы он сразу мог ВЫДАВАТЬ, добавьте в список: 'change_toolinstance'
+        default_rights = [''] 
+
+        perms = Permission.objects.filter(
+            content_type__app_label='inventory', 
+            codename__in=default_rights
+        )
+        instance.user_permissions.add(*perms)

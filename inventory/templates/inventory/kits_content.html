@@ -3,7 +3,7 @@
         <div class="card-header bg-body d-flex justify-content-between align-items-center">
             <h4 class="mb-0">
                 <i class="fa-solid fa-toolbox text-warning"></i> {{ selected_kit.name }}
-                {% if user.is_staff %}
+                {% if user.is_superuser or perms.inventory.change_toolkit %}
                     <button class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="modal" data-bs-target="#editKitModal" title="Редактировать">
                         <i class="fa-solid fa-pencil"></i>
                     </button>
@@ -13,10 +13,14 @@
             <div class="d-flex gap-2">
                 {% if selected_kit.status == 'IN_STOCK' %}
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#issueKitModal">
-                        {% if user.is_staff %}<i class="fa-solid fa-hand-holding"></i> Выдать{% else %}<i class="fa-solid fa-hand-point-up"></i> Взять себе{% endif %}
+                        {% if user.is_superuser or perms.inventory.change_toolkit %}
+                            <i class="fa-solid fa-hand-holding"></i> Выдать
+                        {% else %}
+                            <i class="fa-solid fa-hand-point-up"></i> Взять себе
+                        {% endif %}
                     </button>
                 {% elif selected_kit.status == 'ISSUED' %}
-                        {% if user.is_staff or selected_kit.current_holder == user or user in selected_kit.co_workers.all %}
+                        {% if user.is_superuser or perms.inventory.change_toolkit or selected_kit.current_holder == user or user in selected_kit.co_workers.all %}
                             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#returnKitModal">
                             <i class="fa-solid fa-share"></i> Вернуть
                             </button>
@@ -25,7 +29,7 @@
                         {% endif %}
                 {% endif %}
 
-                {% if user.is_staff %}
+                {% if user.is_superuser or perms.inventory.delete_toolkit %}
                 <form action="{% url 'kit_delete' selected_kit.id %}" method="post" class="d-inline ms-2" onsubmit="return confirm('Удалить комплект? Сами товары останутся на складе.');">
                     {% csrf_token %}
                     <button class="btn btn-outline-danger btn-sm" title="Удалить комплект"><i class="fa-solid fa-trash"></i></button>
@@ -150,7 +154,7 @@
         </div>
     </div>
 
-    {% if user.is_staff %}
+    {% if user.is_superuser or perms.inventory.change_toolkit %}
         <div class="modal fade" id="editKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_edit' selected_kit.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Редактирование</h5></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Название</label>{{ edit_form.name }}</div><div class="mb-3"><label class="fw-bold">Склад приписки</label>{{ edit_form.warehouse }}</div><div class="mb-3"><label class="fw-bold">Описание</label>{{ edit_form.description }}</div></div><div class="modal-footer"><button class="btn btn-primary">Сохранить</button></div></form></div></div></div>
     {% endif %}
 
@@ -161,7 +165,8 @@
         <div class="modal-body">
             <div class="mb-3">
                 <label class="fw-bold small">Ответственный (Получатель):</label>
-                {% if user.is_staff %}
+                
+                {% if user.is_superuser or perms.inventory.change_toolkit %}
                     <select name="employee_id" class="form-select mb-3">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select>
                 {% else %}
                     <input type="hidden" name="employee_id" value="{{ user.id }}">
@@ -173,7 +178,7 @@
                 <label class="fw-bold small text-body-secondary">Кто будет работать с комплектом (смогут вернуть):</label>
                 <div class="border rounded p-2 bg-body" style="max-height: 120px; overflow-y: auto;">
                     {% for emp in employees %}
-                        {% if user.is_staff or emp.id != user.id %}
+                        {% if emp.id != user.id %}
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="partner_ids" value="{{ emp.id }}" id="partner{{ emp.id }}">
                                 <label class="form-check-label small" for="partner{{ emp.id }}">
@@ -232,33 +237,45 @@
         <div class="modal-body">
             <div class="alert alert-warning small mb-2">
                 <i class="fa-solid fa-info-circle"></i> 
-                <b>Внимание:</b> Инструменты вернутся на склад автоматически. Расходники остаются за сотрудником (списывайте или возвращайте их отдельно).
+                <b>Внимание:</b> Инструменты вернутся на склад автоматически. Расходники остаются за сотрудником.
             </div>
 
             <p class="mb-1 fw-bold text-success"><i class="fa-solid fa-arrow-rotate-left"></i> Вернется на склад:</p>
-            <div class="border rounded p-2 bg-body mb-3" style="max-height: 200px; overflow-y: auto;">
-                <ul class="list-unstyled mb-0 small">
-                    {% for tool in selected_kit.tools.all %}
-                        {% if tool.current_holder == selected_kit.current_holder %}
-                            <li class="d-flex justify-content-between border-bottom py-1">
-                                <span>
-                                    <i class="fa-solid fa-hammer text-secondary"></i> 
-                                    <strong>{{ tool.nomenclature.name }}</strong>
-                                    <span class="text-body-secondary">{{ tool.nomenclature.article }}</span>
-                                </span>
-                                <span class="font-monospace text-body-secondary">{{ tool.inventory_id }}</span>
-                            </li>
-                        {% endif %}
-                    {% empty %}
-                        <li class="text-muted text-center">Только пустой кейс</li>
-                    {% endfor %}
-                </ul>
-            </div>
+                <div class="border rounded p-2 bg-body mb-3" style="max-height: 200px; overflow-y: auto;">
+                        <ul class="list-unstyled mb-0 small">
+                            
+                            {% for tool in selected_kit.tools.all %}
+                                {% if tool.current_holder == selected_kit.current_holder and not tool.is_manual_issue %}
+                                    <li class="d-flex justify-content-between border-bottom py-1">
+                                        <span>
+                                            <i class="fa-solid fa-hammer text-secondary"></i> 
+                                            <strong>{{ tool.nomenclature.name }}</strong>
+                                            <span class="text-body-secondary">{{ tool.nomenclature.article }}</span>
+                                        </span>
+                                        <span class="font-monospace text-body-secondary">{{ tool.inventory_id }}</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% for cons in selected_kit.consumables.all %}
+                                {% if cons.holder == selected_kit.current_holder %}
+                                    <li class="d-flex justify-content-between border-bottom py-1 bg-body-tertiary">
+                                        <span>
+                                            <i class="fa-solid fa-box text-info"></i> 
+                                            <strong>{{ cons.nomenclature.name }}</strong>
+                                            <span class="text-body-secondary">{{ cons.nomenclature.article }}</span>
+                                        </span>
+                                        <span class="badge bg-info text-dark">{{ cons.quantity }} шт</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                        </ul>
+                    </div>
 
             <div class="alert alert-danger small py-2 fw-bold text-center">
                 <i class="fa-solid fa-triangle-exclamation"></i> 
-                Проверьте инструменты и расходники перед нажатием кнопки "Подтвердить возврат"!<br>
-                Все утерянное имущество будет учтено в ЗП!
+                Проверьте комплект перед возвратом!
             </div>
 
             <div class="mb-3">
@@ -290,7 +307,6 @@
             }
         }
         
-        // ФУНКЦИЯ ВЫДЕЛИТЬ ВСЕ
         window.toggleAll = function(state) {
             const modal = document.getElementById('issueKitModal');
             if (!modal) return;

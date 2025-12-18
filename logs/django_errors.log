@@ -1,0 +1,134 @@
+ERROR 2025-12-18 19:40:01,200 log Internal Server Error: /admin/login/
+Traceback (most recent call last):
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/fields/related_descriptors.py", line 516, in __get__
+    rel_obj = self.related.get_cached_value(instance)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/fields/mixins.py", line 37, in get_cached_value
+    return instance._state.fields_cache[self.cache_name]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'profile'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: relation "inventory_employeeprofile" does not exist
+LINE 1: ...."id", "inventory_employeeprofile"."user_id" FROM "inventory...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/decorators/cache.py", line 80, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/admin/sites.py", line 449, in login
+    return LoginView.as_view(**defaults)(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/generic/base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/decorators/debug.py", line 143, in sensitive_post_parameters_wrapper
+    return view(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 192, in _view_wrapper
+    result = _process_exception(request, e)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 190, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/decorators/cache.py", line 80, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/auth/views.py", line 89, in dispatch
+    return super().dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/generic/base.py", line 144, in dispatch
+    return handler(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/views/generic/edit.py", line 151, in post
+    return self.form_valid(form)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/auth/views.py", line 108, in form_valid
+    auth_login(self.request, form.get_user())
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/auth/__init__.py", line 197, in login
+    user_logged_in.send(sender=user.__class__, request=request, user=user)
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/dispatch/dispatcher.py", line 189, in send
+    response = receiver(signal=self, sender=sender, **named)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/auth/models.py", line 24, in update_last_login
+    user.save(update_fields=["last_login"])
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/contrib/auth/base_user.py", line 65, in save
+    super().save(*args, **kwargs)
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/base.py", line 902, in save
+    self.save_base(
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/base.py", line 1023, in save_base
+    post_save.send(
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/dispatch/dispatcher.py", line 189, in send
+    response = receiver(signal=self, sender=sender, **named)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/inventory/models.py", line 255, in save_user_profile
+    if hasattr(instance, 'profile'):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/fields/related_descriptors.py", line 523, in __get__
+    rel_obj = self.get_queryset(instance=instance).get(**filter_args)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/query.py", line 631, in get
+    num = len(clone)
+          ^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/query.py", line 368, in __len__
+    self._fetch_all()
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/Users/novozhilovsergey/Projects/tool_system/venv_mac/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: relation "inventory_employeeprofile" does not exist
+LINE 1: ...."id", "inventory_employeeprofile"."user_id" FROM "inventory...
+                                                             ^
+
+ERROR 2025-12-18 19:40:01,208 basehttp "POST /admin/login/?next=/employees/1/permissions/ HTTP/1.1" 500 251110

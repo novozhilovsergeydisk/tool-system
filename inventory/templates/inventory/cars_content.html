@@ -7,7 +7,8 @@
                     {{ selected_car.name }} 
                 </h4>
                 <span class="text-body-secondary fs-5 font-monospace border px-2 rounded bg-body-tertiary me-2">{{ selected_car.license_plate }}</span>
-                {% if user.is_staff %}
+                
+                {% if user.is_superuser or perms.inventory.change_car %}
                     <button class="btn btn-sm btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#editCarModal" title="Редактировать"><i class="fa-solid fa-pencil"></i></button>
                 {% endif %}
             </div>
@@ -15,47 +16,52 @@
             <div class="d-flex gap-1 ms-auto">
                 {% if selected_car.status == 'PARKED' %}
                     <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#issueCarModal">
-                        {% if user.is_staff %}<i class="fa-solid fa-key"></i> Выдать{% else %}<i class="fa-solid fa-key"></i> Взять{% endif %}
-                    </button>
-                    
-                    {% if user.is_staff %}
-                        <form action="{% url 'car_to_maintenance' selected_car.id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-secondary fw-bold" onclick="return confirm('На ТО?');"><i class="fa-solid fa-wrench"></i> ТО</button></form>
-                        {% if selected_car.is_truck %}
-                            <form action="{% url 'car_to_tech_inspection' selected_car.id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-info text-white fw-bold" onclick="return confirm('На Техосмотр?');"><i class="fa-solid fa-clipboard-list"></i> Техосмотр</button></form>
+                        {% if user.is_superuser or perms.inventory.change_car %}
+                            <i class="fa-solid fa-key"></i> Выдать
+                        {% else %}
+                            <i class="fa-solid fa-key"></i> Взять
                         {% endif %}
-                        <form action="{% url 'car_mark_broken' selected_car.id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-dark fw-bold" onclick="return confirm('Пометить машину как СЛОМАННУЮ?');"><i class="fa-solid fa-skull-crossbones"></i> Сломан</button></form>
+                    </button>
+
+                    {% if user.is_superuser or perms.inventory.change_car %}
+                        <form action="{% url 'car_to_maintenance' selected_car.id %}" method="post" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-secondary fw-bold ms-1" onclick="return confirm('На ТО?');"><i class="fa-solid fa-wrench"></i> ТО</button></form>
+                        {% if selected_car.is_truck %}
+                            <form action="{% url 'car_to_tech_inspection' selected_car.id %}" method="post" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-info text-white fw-bold ms-1" onclick="return confirm('На Техосмотр?');"><i class="fa-solid fa-clipboard-list"></i> Техосмотр</button></form>
+                        {% endif %}
+                        <form action="{% url 'car_mark_broken' selected_car.id %}" method="post" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-dark fw-bold ms-1" onclick="return confirm('Пометить машину как СЛОМАННУЮ?');"><i class="fa-solid fa-skull-crossbones"></i> Сломан</button></form>
                     {% endif %}
 
                 {% elif selected_car.status == 'ON_ROUTE' %}
-                     {% if user.is_staff or selected_car.current_driver == user %}
+                     {% if user.is_superuser or perms.inventory.change_car or selected_car.current_driver == user %}
                          <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#returnCarModal"><i class="fa-solid fa-square-parking"></i> Вернуть</button>
                      {% else %}
                          <button class="btn btn-sm btn-secondary" disabled><i class="fa-solid fa-lock"></i> Занят</button>
                      {% endif %}
-                     {% if user.is_staff %}
-                        <form action="{% url 'car_mark_broken' selected_car.id %}" method="post">{% csrf_token %}<button class="btn btn-sm btn-dark fw-bold" onclick="return confirm('Машина сломалась на выезде?');"><i class="fa-solid fa-skull-crossbones"></i> Сломан</button></form>
+                     
+                     {% if user.is_superuser or perms.inventory.change_car %}
+                        <form action="{% url 'car_mark_broken' selected_car.id %}" method="post" class="d-inline ms-1">{% csrf_token %}<button class="btn btn-sm btn-dark fw-bold" onclick="return confirm('Машина сломалась на выезде?');"><i class="fa-solid fa-skull-crossbones"></i> Сломан</button></form>
                      {% endif %}
 
                 {% elif selected_car.status == 'MAINTENANCE' %}
                     <div class="text-secondary fw-bold py-1 px-2 border rounded d-none d-lg-block small"><i class="fa-solid fa-screwdriver-wrench"></i> На ТО</div>
-                    {% if user.is_staff %}
+                    {% if user.is_superuser or perms.inventory.change_car %}
                         <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#returnFromTOModal"><i class="fa-solid fa-check"></i> Вернуть</button>
                     {% endif %}
 
                 {% elif selected_car.status == 'TECH_INSPECTION' %}
                     <div class="text-info fw-bold py-1 px-2 border rounded d-none d-lg-block small"><i class="fa-solid fa-clipboard-list"></i> На Техосмотре</div>
-                    {% if user.is_staff %}
+                    {% if user.is_superuser or perms.inventory.change_car %}
                          <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#returnFromTIModal"><i class="fa-solid fa-check"></i> Вернуть</button>
                     {% endif %}
                 
                 {% elif selected_car.status == 'BROKEN' %}
                     <div class="text-white bg-danger fw-bold py-1 px-2 border rounded d-none d-lg-block small"><i class="fa-solid fa-triangle-exclamation"></i> СЛОМАН</div>
-                    {% if user.is_staff %}
+                    {% if user.is_superuser or perms.inventory.change_car %}
                         <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#fixCarModal"><i class="fa-solid fa-screwdriver"></i> Починили</button>
                     {% endif %}
                 {% endif %}
                 
-                {% if user.is_staff %}
+                {% if user.is_superuser or perms.inventory.delete_car %}
                 <form action="{% url 'car_delete' selected_car.id %}" method="post" class="d-inline ms-2" onsubmit="return confirm('Удалить авто навсегда?');">
                     {% csrf_token %}
                     <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Удалить"><i class="fa-solid fa-trash"></i></button>
@@ -107,8 +113,8 @@
     <div class="mb-4">
         <h5 class="mb-3 text-body-secondary"><i class="fa-solid fa-road"></i> История поездок</h5>
         <div class="card shadow-sm">
-            <div class="card-body p-0 bg-body">
-                <table class="table table-striped mb-0 align-middle small">
+            <div class="card-body p-0 bg-body table-responsive">
+                <table class="table table-striped mb-0 align-middle small text-nowrap">
                     <thead><tr><th>Дата</th><th>Водитель</th><th>Событие</th><th>Пробег</th><th>Заправка</th></tr></thead>
                     <tbody>
                         {% for log in history_trip_page %}
@@ -147,8 +153,8 @@
     <div>
         <h5 class="mb-3 text-body-secondary"><i class="fa-solid fa-wrench"></i> История обслуживания</h5>
         <div class="card shadow-sm">
-            <div class="card-body p-0 bg-body">
-                <table class="table table-striped mb-0 align-middle small">
+            <div class="card-body p-0 bg-body table-responsive">
+                <table class="table table-striped mb-0 align-middle small text-nowrap">
                     <thead><tr><th>Дата</th><th>Событие</th><th>Пробег</th><th>Детали</th></tr></thead>
                     <tbody>
                         {% for log in history_maint_page %}
@@ -189,7 +195,7 @@
         </div>
     </div>
 
-    {% if user.is_staff %}
+    {% if user.is_superuser or perms.inventory.change_car %}
         <div class="modal fade" id="editCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_edit' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Редактирование авто</h5></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Марка/Модель</label>{{ edit_form.name }}</div><div class="mb-3"><label class="fw-bold">Госномер</label>{{ edit_form.license_plate }}</div><div class="mb-3"><label class="fw-bold">Топливо</label>{{ edit_form.fuel_type }}</div><div class="mb-3"><label class="fw-bold">Это грузовой?</label> {{ edit_form.is_truck }}</div><div class="mb-3"><label class="fw-bold">Пробег</label>{{ edit_form.current_mileage }}</div><div class="mb-3"><label class="fw-bold">Посл. ТО</label>{{ edit_form.last_service_mileage }}</div><div class="mb-3"><label class="fw-bold">Посл. Техосмотр</label>{{ edit_form.last_ti_date }}</div><div class="mb-3"><label class="fw-bold">Страховка до</label>{{ edit_form.insurance_expiry }}</div><div class="mb-3"><label class="fw-bold">Чек-лист</label>{{ edit_form.checklist }}</div><div class="mb-3"><label>Описание</label>{{ edit_form.description }}</div></div><div class="modal-footer"><button class="btn btn-primary">Сохранить</button></div></form></div></div></div>
 
         <div class="modal fade" id="returnFromTOModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_return_from_maintenance' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат с ТО (Масло)</h5></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Пробег после ТО (км):</label><input type="number" name="end_mileage" class="form-control" min="{{ selected_car.current_mileage }}" value="{{ selected_car.current_mileage }}" required></div><div class="alert alert-info small">Счетчик замены масла будет сброшен (+7500 км).</div><div class="mb-3"><label class="fw-bold">Выполненные работы:</label><textarea name="works" class="form-control" rows="4" placeholder="ТО..." required></textarea></div></div><div class="modal-footer"><button class="btn btn-success">Завершить</button></div></form></div></div></div>
@@ -197,7 +203,14 @@
         <div class="modal fade" id="fixCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_mark_fixed' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Ремонт завершен</h5></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Текущий пробег (км):</label><input type="number" name="end_mileage" class="form-control" min="{{ selected_car.current_mileage }}" value="{{ selected_car.current_mileage }}" required></div><div class="mb-3 form-check"><input type="checkbox" class="form-check-input" name="fuel_added" id="fuelFIX"><label class="form-check-label" for="fuelFIX">Была заправка?</label></div><div class="mb-3" id="fuelFIXBlock" style="display:none;"><input type="number" name="fuel_liters" class="form-control" placeholder="Литров"></div><div class="mb-3"><label class="fw-bold">Проведенные работы:</label><textarea name="works" class="form-control" rows="4" placeholder="Что ремонтировали..." required></textarea></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть на парковку</button></div></form></div></div></div>
     {% endif %}
     
-    <div class="modal fade" id="issueCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_issue' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Выдача автомобиля</h5></div><div class="modal-body"><p>Авто: <b>{{ selected_car.name }}</b></p><div class="alert alert-warning"><h6 class="alert-heading fw-bold"><i class="fa-solid fa-clipboard-check"></i> Напоминание:</h6><hr><pre style="white-space: pre-wrap; margin-bottom:0">{{ selected_car.checklist }}</pre></div>{% if user.is_staff %}<label>Водитель:</label><select name="employee_id" class="form-select">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="employee_id" value="{{ user.id }}"><p>Вы берете авто на себя.</p>{% endif %}</div><div class="modal-footer"><button class="btn btn-primary">Подтвердить выдачу</button></div></form></div></div></div>
+    <div class="modal fade" id="issueCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_issue' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-primary text-white"><h5 class="modal-title">Выдача автомобиля</h5></div><div class="modal-body"><p>Авто: <b>{{ selected_car.name }}</b></p><div class="alert alert-warning"><h6 class="alert-heading fw-bold"><i class="fa-solid fa-clipboard-check"></i> Напоминание:</h6><hr><pre style="white-space: pre-wrap; margin-bottom:0">{{ selected_car.checklist }}</pre></div>
+        {% if user.is_superuser or perms.inventory.change_car %}
+            <label>Водитель:</label><select name="employee_id" class="form-select">{% for emp in employees %}<option value="{{ emp.id }}">{{ emp.get_full_name|default:emp.username }}</option>{% endfor %}</select>
+        {% else %}
+            <input type="hidden" name="employee_id" value="{{ user.id }}"><p class="text-success fw-bold">Вы берете автомобиль на себя.</p>
+        {% endif %}
+    </div><div class="modal-footer"><button class="btn btn-primary">Подтвердить выдачу</button></div></form></div></div></div>
+    
     <div class="modal fade" id="returnCarModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'car_return' selected_car.id %}">{% csrf_token %}<div class="modal-header bg-success text-white"><h5 class="modal-title">Возврат на парковку</h5></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Конечный пробег (км):</label><input type="number" name="end_mileage" class="form-control" min="{{ selected_car.current_mileage }}" value="{{ selected_car.current_mileage }}" required><div class="form-text">Предыдущий: {{ selected_car.current_mileage }} км</div></div><div class="mb-3 form-check"><input type="checkbox" class="form-check-input" id="fuelCheck" name="fuel_added"><label class="form-check-label" for="fuelCheck">Была заправка?</label></div><div class="mb-3" id="fuelInputBlock" style="display:none;"><label class="form-label">Сколько литров:</label><input type="number" name="fuel_liters" class="form-control" min="0" placeholder="0"></div></div><div class="modal-footer"><button class="btn btn-success">Вернуть</button></div></form></div></div></div>
 
 {% else %}

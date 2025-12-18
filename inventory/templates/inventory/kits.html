@@ -5,7 +5,8 @@
     <div class="col-md-4 border-end bg-body p-3" style="min-height: 85vh;">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0">📂 Комплекты</h5>
-            {% if user.is_staff %}
+            
+            {% if user.is_superuser or perms.inventory.add_toolkit %}
             <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#createKitModal">
                 <i class="fa-solid fa-plus"></i> Создать
             </button>
@@ -48,7 +49,7 @@
     </div>
 </div>
 
-{% if user.is_staff %}
+{% if user.is_superuser or perms.inventory.add_toolkit %}
 <div class="modal fade" id="createKitModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'kit_create' %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Новый комплект</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="fw-bold">Название</label>{{ form.name }}</div><div class="mb-3"><label class="fw-bold">Склад приписки</label>{{ form.warehouse }}</div><div class="mb-3"><label class="fw-bold">Описание</label>{{ form.description }}</div></div><div class="modal-footer"><button class="btn btn-success">Создать</button></div></form></div></div></div>
 {% endif %}
 
@@ -74,7 +75,6 @@
                 contentDiv.innerHTML = html;
                 contentDiv.style.opacity = '1';
                 history.pushState(null, '', link.href);
-                // Если нужны скрипты для модалок внутри контента - они там будут работать
             });
             
             // Мобильная прокрутка
@@ -85,7 +85,6 @@
     });
 
     // Скрипты для модалок удаления (передаем ID)
-    // Так как функции setRemove... вызываются из HTML (onclick), они должны быть глобальными.
     window.setRemoveToolModal = function(kitId, toolId, name) {
         document.getElementById('removeToolName').innerText = name;
         document.getElementById('removeToolForm').action = "/kits/" + kitId + "/remove_tool/" + toolId + "/";
@@ -96,32 +95,6 @@
         var i = document.getElementById('removeConsQty'); i.max = maxQty; i.value = 1;
         document.getElementById('removeConsForm').action = "/kits/" + kitId + "/remove_consumable/" + balId + "/";
     };
-	// === ФУНКЦИИ ДЛЯ КОНТЕНТА (МОДАЛКИ И ПОИСК) ===
-    
-    // Поиск в выпадающих списках (Инструменты и Расходники)
-    window.filterOptions = function(input, selectId) {
-        const filter = input.value.toLowerCase();
-        const select = document.getElementById(selectId);
-        if (!select) return;
-        
-        const options = select.getElementsByTagName('option');
-        
-        for (let i = 0; i < options.length; i++) {
-            const txt = options[i].text.toLowerCase();
-            if (txt.includes(filter)) {
-                options[i].style.display = "";
-                options[i].hidden = false;  // Для надежности
-            } else {
-                options[i].style.display = "none";
-                options[i].hidden = true;   // Для надежности
-            }
-        }
-    };
-
-    // Функции для модалок (оставьте их, если они здесь были)
-    window.setRemoveToolModal = function(...) { ... };
-    window.setRemoveConsModal = function(...) { ... };
-    window.toggleAll = function(...) { ... };
-
 </script>
+
 {% endblock %}

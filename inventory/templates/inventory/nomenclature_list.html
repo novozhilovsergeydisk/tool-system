@@ -4,8 +4,8 @@
 <div class="d-flex justify-content-between align-items-center mb-3 mt-2">
     <h3 class="mb-0">📒 Справочник номенклатуры</h3>
     
-    {% if user.is_staff %}
-    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addNomenclatureModal">
+    {% if user.is_superuser or perms.inventory.add_nomenclature %}
+    <button class="btn btn-success shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addNomenclatureModal">
         <i class="fa-solid fa-plus"></i> Добавить позицию
     </button>
     {% endif %}
@@ -15,7 +15,7 @@
     {% include 'inventory/nomenclature_list_content.html' %}
 </div>
 
-{% if user.is_staff %}
+{% if user.is_superuser or perms.inventory.add_nomenclature %}
 <div class="modal fade" id="addNomenclatureModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -49,7 +49,7 @@
                     <div class="mb-3"><label class="fw-bold">Описание</label>{{ form.description }}</div>
                 </div>
                 <div class="modal-footer">
-				{% if form.confirm_save.field.widget.input_type == 'checkbox' %}
+                    {% if form.confirm_save.field.widget.input_type == 'checkbox' %}
                         <div class="alert alert-warning mt-3 border-warning">
                             <i class="fa-solid fa-triangle-exclamation"></i> Подтверждение:
                             <div class="form-check mt-2">
@@ -78,6 +78,7 @@
     });
 </script>
 {% endif %}
+{% endif %}
 
 <script>
     const contentDiv = document.getElementById('nomenclatureContent');
@@ -98,6 +99,5 @@
         }
     });
 </script>
-{% endif %}
 
 {% endblock %}

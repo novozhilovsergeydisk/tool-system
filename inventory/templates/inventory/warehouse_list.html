@@ -4,47 +4,64 @@
 <div class="d-flex justify-content-between align-items-center mb-3 mt-2">
     <h3 class="mb-0">🏭 Склады</h3>
     
-    {% if user.is_staff %}
-    <a href="{% url 'warehouse_add' %}" class="btn btn-success">
+    {% if user.is_superuser or perms.inventory.add_warehouse %}
+    <a href="{% url 'warehouse_add' %}" class="btn btn-success shadow-sm">
         <i class="fa-solid fa-plus"></i> Добавить склад
     </a>
     {% endif %}
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-body p-0">
+    <div class="card-body p-0 table-responsive">
         <table class="table table-hover mb-0 align-middle">
-            <thead>
+            <thead class="bg-body-secondary">
                 <tr>
                     <th>Название</th>
                     <th>Адрес</th>
-                    {% if user.is_staff %} <th>Действия</th> {% endif %}
+                    
+                    {% if user.is_superuser or perms.inventory.change_warehouse or perms.inventory.delete_warehouse %}
+                        <th class="text-end" style="width: 120px;">Действия</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
                 {% for wh in warehouses %}
                 <tr>
-                    <td><b>{{ wh.name }}</b></td>
-                    <td class="text-muted">{{ wh.address|default:"-" }}</td>
-                    
-                    {% if user.is_staff %}
                     <td>
-                        <div class="d-flex gap-1">
-                            <a href="{% url 'warehouse_edit' wh.id %}" class="btn btn-sm btn-outline-primary">
+                        <span class="fw-bold text-primary">{{ wh.name }}</span>
+                    </td>
+                    <td class="text-body-secondary">{{ wh.address|default:"-" }}</td>
+                    
+                    {% if user.is_superuser or perms.inventory.change_warehouse or perms.inventory.delete_warehouse %}
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            
+                            {% if user.is_superuser or perms.inventory.change_warehouse %}
+                            <a href="{% url 'warehouse_edit' wh.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                 <i class="fa-solid fa-pen"></i>
                             </a>
-                            <form action="{% url 'warehouse_delete' wh.id %}" method="post" onsubmit="return confirm('Удалить склад {{ wh.name }}?');">
+                            {% endif %}
+                            
+                            {% if user.is_superuser or perms.inventory.delete_warehouse %}
+                            <form action="{% url 'warehouse_delete' wh.id %}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить склад «{{ wh.name }}»?');" class="d-inline">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </form>
+                            {% endif %}
+                            
                         </div>
                     </td>
                     {% endif %}
                 </tr>
                 {% empty %}
-                <tr><td colspan="3" class="text-center text-muted py-3">Складов нет</td></tr>
+                <tr>
+                    <td colspan="3" class="text-center text-body-secondary py-4">
+                        <i class="fa-solid fa-warehouse fa-3x mb-3 opacity-25"></i>
+                        <p>Складов пока нет</p>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>

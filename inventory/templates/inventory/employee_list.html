@@ -1,70 +1,103 @@
 {% extends 'inventory/base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 mt-2">
-    <h3 class="mb-0">👥 Сотрудники</h3>
-    
-    {% if user.is_staff %}
-    <a href="{% url 'employee_add' %}" class="btn btn-success">
-        <i class="fa-solid fa-user-plus"></i> Добавить сотрудника
-    </a>
-    {% endif %}
+<div class="row align-items-center mb-3 mt-2">
+    <div class="col-md-6">
+        <h3 class="mb-0"><i class="fa-solid fa-users"></i> Сотрудники</h3>
+    </div>
+    <div class="col-md-6 text-md-end mt-2 mt-md-0">
+        {% if user.is_superuser %}
+        <a href="{% url 'employee_add' %}" class="btn btn-success shadow-sm">
+            <i class="fa-solid fa-user-plus"></i> Добавить сотрудника
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4 border-0 bg-body-tertiary">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-auto flex-grow-1">
+                <div class="input-group">
+                    <span class="input-group-text bg-body border-end-0"><i class="fa-solid fa-magnifying-glass text-secondary"></i></span>
+                    <input type="text" name="search" class="form-control border-start-0" placeholder="Поиск по имени, логину или email..." value="{{ search }}">
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Найти</button>
+                {% if search %}
+                    <a href="{% url 'employee_list' %}" class="btn btn-outline-secondary" title="Сбросить"><i class="fa-solid fa-xmark"></i></a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-body p-0">
+    <div class="card-body p-0 table-responsive">
         <table class="table table-hover mb-0 align-middle">
-            <thead>
+            <thead class="bg-body-secondary">
                 <tr>
                     <th>Логин</th>
                     <th>Имя Фамилия</th>
                     <th>Email</th>
                     <th>Статус</th>
-                    <th>Действия</th>
+                    <th class="text-end">Действия</th>
                 </tr>
             </thead>
             <tbody>
                 {% for emp in employees %}
                 <tr class="{% if not emp.is_active %}opacity-50{% endif %}">
                     <td>
-                        {% if not emp.is_active %}
-                            <s class="text-danger">{{ emp.username }}</s>
-                        {% else %}
-                            <b>{{ emp.username }}</b>
-                        {% endif %}
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div>
+                                {% if not emp.is_active %}
+                                    <s class="text-danger small">{{ emp.username }}</s>
+                                {% else %}
+                                    <span class="fw-bold">{{ emp.username }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
                     </td>
-                    <td>{{ emp.first_name }} {{ emp.last_name }}</td>
-                    <td>{{ emp.email }}</td>
+                    <td>{{ emp.get_full_name|default:"-" }}</td>
+                    <td><small class="text-body-secondary">{{ emp.email|default:"-" }}</small></td>
                     <td>
                         {% if emp.is_active %}
-                            <span class="badge bg-success">Активен</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">Активен</span>
                         {% else %}
-                            <span class="badge bg-secondary">Заблокирован</span>
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Заблокирован</span>
                         {% endif %}
-                        {% if emp.is_staff %}
-                            <span class="badge bg-danger">Админ</span>
+                        {% if emp.is_superuser %}
+                            <span class="badge bg-danger">Суперюзер</span>
+                        {% elif emp.is_staff %}
+                            <span class="badge bg-warning text-dark">Админ</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <div class="d-flex gap-1">
-                            <a href="{% url 'employee_edit' emp.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
-                                <i class="fa-solid fa-pen"></i>
-                            </a>
-                            
-                            {% if emp.id != user.id %}
-                                <form action="{% url 'employee_delete' emp.id %}" method="post" onsubmit="return confirm('Удалить сотрудника {{ emp.username }}? Это действие необратимо!');">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </form>
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-1">
+                            {% if user.is_superuser %}
+                                <a href="{% url 'employee_permissions' emp.id %}" class="btn btn-sm btn-warning text-dark" title="Управление правами">
+                                    <i class="fa-solid fa-key"></i>
+                                </a>
+
+                                <a href="{% url 'employee_edit' emp.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+                                
+                                {# Кнопка удаления полностью вырезана отсюда #}
                             {% endif %}
                         </div>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center py-3 text-muted">Нет сотрудников</td>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        <i class="fa-solid fa-user-slash fa-3x mb-3 opacity-25"></i>
+                        <p>Сотрудники не найдены</p>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

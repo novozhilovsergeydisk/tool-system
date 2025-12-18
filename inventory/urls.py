@@ -63,7 +63,6 @@ urlpatterns = [
     path('employees/', views.employee_list, name='employee_list'),
     path('employees/add/', views.employee_add, name='employee_add'),
     path('employees/<int:user_id>/edit/', views.employee_edit, name='employee_edit'),
-    path('employees/<int:user_id>/delete/', views.employee_delete, name='employee_delete'),
 
     path('print/barcodes/', views.print_barcodes, name='print_barcodes'),
     path('quick/return/', views.quick_return, name='quick_return'),
@@ -74,4 +73,5 @@ urlpatterns = [
     path('api/writeoff/item/', views.api_writeoff_item, name='api_writeoff_item'),
     path('tool/<int:tool_id>/take_self/', views.tool_take_self, name='tool_take_self'),
     path('tool/<int:tool_id>/return_self/', views.tool_return_self, name='tool_return_self'),
+    path('employees/<int:user_id>/permissions/', views.employee_permissions, name='employee_permissions'),
 ]
