@@ -598,7 +598,7 @@ def car_list(request):
     if request.GET.get('car_id'):
         selected_car = get_object_or_404(Car, pk=request.GET.get('car_id'))
         
-        if request.user.has_perm('inventory.change_car'):
+        if request.user.has_perm('login_required'):
             edit_form = CarForm(instance=selected_car)
         else:
             edit_form = None 
@@ -650,25 +650,86 @@ def car_delete(request, car_id):
 
 # --- ОПЕРАЦИИ (Выдача, Возврат, ТО, Ремонт) ---
 
-@permission_required_custom('inventory.change_car')
+@login_required 
 def car_issue(request, car_id):
     car = get_object_or_404(Car, pk=car_id)
+    
     if request.method == 'POST':
-        user = get_object_or_404(User, pk=request.POST.get('employee_id'))
-        car.current_driver = user; car.status = 'ON_ROUTE'; car.save()
-        MovementLog.objects.create(initiator=request.user, action_type='CAR_ISSUE', target_user=user, target_car=car, comment="Выезд")
+        # Если машина уже занята или сломана
+        if car.status != 'PARKED':
+             messages.error(request, "Эта машина недоступна для взятия.")
+             return redirect(f'/cars/?car_id={car.id}')
+
+        # ЛОГИКА ОПРЕДЕЛЕНИЯ ВОДИТЕЛЯ
+        # Если админ - берет ID из формы. Если обычный юзер - берем его самого.
+        if request.user.is_staff and request.POST.get('employee_id'):
+            user = get_object_or_404(User, pk=request.POST.get('employee_id'))
+        else:
+            user = request.user
+
+        car.current_driver = user
+        car.status = 'ON_ROUTE'
+        car.save()
+        
+        MovementLog.objects.create(
+            initiator=request.user, 
+            action_type='CAR_ISSUE', 
+            target_user=user, 
+            target_car=car, 
+            comment="Выезд"
+        )
+        messages.success(request, f"Вы взяли автомобиль: {car.name}")
+        
     return redirect(f'/cars/?car_id={car.id}')
 
-@permission_required_custom('inventory.change_car')
+@login_required  # <--- ИЗМЕНЕНО: Доступно всем авторизованным
 def car_return(request, car_id):
     car = get_object_or_404(Car, pk=car_id)
+    
     if request.method == 'POST':
+        # Проверка: Обычный юзер может вернуть только СВОЮ машину
+        if not request.user.is_staff and car.current_driver != request.user:
+             messages.error(request, "Вы не можете вернуть чужую машину.")
+             return redirect(f'/cars/?car_id={car.id}')
+
         holder_was = car.current_driver
-        end_mileage = int(request.POST.get('end_mileage', car.current_mileage))
-        trip_dist = max(0, end_mileage - car.current_mileage)
-        fuel_liters = int(request.POST.get('fuel_liters', 0)) if request.POST.get('fuel_added') == 'on' else 0
-        car.current_driver = None; car.status = 'PARKED'; car.current_mileage = end_mileage; car.save()
-        MovementLog.objects.create(initiator=request.user, action_type='CAR_RETURN', source_user=holder_was, source_car=car, trip_mileage=trip_dist, fuel_liters=fuel_liters, comment=f"Возврат. Пробег: {trip_dist} км.")
+        
+        # Пробег (если поле пустое или юзер не ввел - оставляем старый)
+        try:
+            end_mileage = int(request.POST.get('end_mileage', car.current_mileage))
+        except (ValueError, TypeError):
+            end_mileage = car.current_mileage
+            
+        # Защита от скручивания пробега
+        if end_mileage < car.current_mileage:
+            end_mileage = car.current_mileage
+
+        trip_dist = end_mileage - car.current_mileage
+        
+        # Топливо
+        fuel_liters = 0
+        if request.POST.get('fuel_added') == 'on':
+            try:
+                fuel_liters = int(request.POST.get('fuel_liters', 0))
+            except ValueError:
+                fuel_liters = 0
+
+        car.current_driver = None
+        car.status = 'PARKED'
+        car.current_mileage = end_mileage
+        car.save()
+        
+        MovementLog.objects.create(
+            initiator=request.user, 
+            action_type='CAR_RETURN', 
+            source_user=holder_was, 
+            source_car=car, 
+            trip_mileage=trip_dist, 
+            fuel_liters=fuel_liters, 
+            comment=f"Возврат. Пробег: {trip_dist} км."
+        )
+        messages.success(request, "Автомобиль возвращен на парковку.")
+        
     return redirect(f'/cars/?car_id={car.id}')
 
 @permission_required_custom('inventory.change_car')
